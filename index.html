@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Rep & Set Counter</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <!-- Main workout timer (top-left, visible once workout starts) -->
+    <div id="main-timer" class="main-timer hidden" aria-live="polite">
+      <span class="main-timer-label">Workout</span>
+      <span id="main-timer-value" class="main-timer-value">00:00</span>
+    </div>
+
+    <!-- Screen: Pre-start -->
+    <section id="screen-start" class="screen">
+      <header class="header">
+        <p class="eyebrow">Workout Counter</p>
+        <h1>Ready when you are</h1>
+      </header>
+
+      <div class="date-card">
+        <p class="date-label">Today · United States (Eastern)</p>
+        <p id="current-date" class="date-value"></p>
+        <p id="current-time" class="time-value"></p>
+        <p class="timezone-note">Timezone: America/New_York</p>
+      </div>
+
+      <button id="btn-start-workout" class="btn btn-primary btn-lg" type="button">
+        Start Workout
+      </button>
+    </section>
+
+    <!-- Screen: Active session -->
+    <section id="screen-active" class="screen hidden">
+      <header class="header header-compact">
+        <p class="eyebrow">In session</p>
+        <h1 id="session-title">Workout 1</h1>
+      </header>
+
+      <div class="phase-card" id="phase-card">
+        <p id="phase-label" class="phase-label">Press Start to begin</p>
+        <p id="phase-timer" class="phase-timer">00:00</p>
+        <p id="phase-hint" class="phase-hint">Movement time for this set</p>
+      </div>
+
+      <div class="controls">
+        <button id="btn-cycle" class="btn btn-primary btn-lg" type="button">
+          Workout 1 · Start
+        </button>
+        <button id="btn-finish-exercise" class="btn btn-secondary" type="button">
+          Finish
+        </button>
+        <button id="btn-finish-workout" class="btn btn-danger" type="button">
+          Finish Workout
+        </button>
+      </div>
+
+      <div class="live-log" id="live-log" aria-label="Sets and breaks so far">
+        <p class="live-log-title">This workout</p>
+        <ul id="live-log-list"></ul>
+      </div>
+    </section>
+
+    <!-- Screen: Summary -->
+    <section id="screen-summary" class="screen hidden">
+      <header class="header">
+        <p class="eyebrow">Session complete</p>
+        <h1>Workout Summary</h1>
+      </header>
+
+      <div class="summary-meta" id="summary-meta"></div>
+      <div class="summary-body" id="summary-body"></div>
+
+      <button id="btn-new-session" class="btn btn-primary btn-lg" type="button">
+        New Session
+      </button>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
