@@ -6,6 +6,8 @@ const STORAGE_KEY = "workout-counter-sessions";
 const TZ_STORAGE_KEY = "workout-counter-timezone";
 const SHOW_NOTES_KEY = "workout-counter-show-session-notes";
 const SHOW_START_TIME_KEY = "workout-counter-show-start-time";
+const MAX_BREAK_SEC_KEY = "workout-counter-max-break-sec";
+const MAX_SET_SEC_KEY = "workout-counter-max-set-sec";
 const MOVEMENT_NAMES_KEY = "workout-counter-movement-names";
 const EXPORT_FORMAT = "workout-counter-backup";
 const EXPORT_VERSION = 1;
@@ -72,6 +74,10 @@ const els = {
   liveLogList: document.getElementById("live-log-list"),
   finishedList: document.getElementById("finished-workouts-list"),
   finishedEmpty: document.getElementById("finished-workouts-empty"),
+  finishedWorkouts: document.getElementById("finished-workouts"),
+  btnSessionWorkoutsToggle: document.getElementById("btn-session-workouts-toggle"),
+  sessionWorkoutsPanel: document.getElementById("session-workouts-panel"),
+  sessionWorkoutsToggleLabel: document.getElementById("session-workouts-toggle-label"),
   sessionPauseNote: document.getElementById("session-pause-note"),
   summaryMeta: document.getElementById("summary-meta"),
   summaryBody: document.getElementById("summary-body"),
@@ -100,6 +106,10 @@ const els = {
   settingsClientInfo: document.getElementById("settings-client-info"),
   toggleSessionNotes: document.getElementById("toggle-session-notes"),
   toggleStartTime: document.getElementById("toggle-start-time"),
+  inputMaxBreakMin: document.getElementById("input-max-break-min"),
+  inputMaxBreakSec: document.getElementById("input-max-break-sec"),
+  inputMaxSetMin: document.getElementById("input-max-set-min"),
+  inputMaxSetSec: document.getElementById("input-max-set-sec"),
   btnExportSessions: document.getElementById("btn-export-sessions"),
   btnImportSessions: document.getElementById("btn-import-sessions"),
   btnExportSessionsSide: document.getElementById("btn-export-sessions-side"),
@@ -155,6 +165,30 @@ function loadShowStartTime() {
   }
 }
 
+/** Max break length in seconds; 0 = no limit. Default 90s (1:30). */
+function loadMaxBreakSec() {
+  try {
+    const v = localStorage.getItem(MAX_BREAK_SEC_KEY);
+    if (v === null) return 90;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 90;
+  } catch {
+    return 90;
+  }
+}
+
+/** Max set length in seconds before “still going?” prompt. Default 120s (2:00). 0 = off. */
+function loadMaxSetSec() {
+  try {
+    const v = localStorage.getItem(MAX_SET_SEC_KEY);
+    if (v === null) return 120;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 120;
+  } catch {
+    return 120;
+  }
+}
+
 function loadSavedTimezone() {
   try {
     const saved = localStorage.getItem(TZ_STORAGE_KEY);
@@ -174,6 +208,10 @@ const state = {
   timezone: loadSavedTimezone(),
   showSessionNotes: loadShowSessionNotes(),
   showStartTime: loadShowStartTime(),
+  maxBreakSec: loadMaxBreakSec(),
+  maxSetSec: loadMaxSetSec(),
+  setLongPromptOpen: false,
+  setLongPromptAcked: false,
   pickerIndex: 0,
   workoutStartedAt: null, // wall-clock Date.now() when session began (for Start display)
   mainElapsedMs: 0,
@@ -196,6 +234,9 @@ const state = {
   selectedSessionIds: new Set(),
   countdownTimerId: null,
   canResumeSession: false,
+  /** True after finishing a movement until the next one is named (or session ends) */
+  awaitingNextMovement: false,
+  sessionWorkoutsOpen: false,
 };
 
 function getTimezone() {
@@ -563,11 +604,175 @@ function refreshSettingsClientInfo() {
   `;
 }
 
+function secToMinSec(total) {
+  const t = total || 0;
+  return { mins: Math.floor(t / 60), secs: t % 60 };
+}
+
+function syncMaxBreakInputs() {
+  const { mins, secs } = secToMinSec(state.maxBreakSec);
+  if (els.inputMaxBreakMin) els.inputMaxBreakMin.value = String(mins);
+  if (els.inputMaxBreakSec) els.inputMaxBreakSec.value = String(secs);
+}
+
+function syncMaxSetInputs() {
+  const { mins, secs } = secToMinSec(state.maxSetSec);
+  if (els.inputMaxSetMin) els.inputMaxSetMin.value = String(mins);
+  if (els.inputMaxSetSec) els.inputMaxSetSec.value = String(secs);
+}
+
+function readLimitFromInputs(minEl, secEl) {
+  const mins = Math.max(0, Math.min(59, parseInt(minEl?.value, 10) || 0));
+  const secs = Math.max(0, Math.min(59, parseInt(secEl?.value, 10) || 0));
+  return mins * 60 + secs;
+}
+
+function readMaxBreakFromInputs() {
+  return readLimitFromInputs(els.inputMaxBreakMin, els.inputMaxBreakSec);
+}
+
+function readMaxSetFromInputs() {
+  return readLimitFromInputs(els.inputMaxSetMin, els.inputMaxSetSec);
+}
+
+function saveMaxBreakSec(sec) {
+  state.maxBreakSec = Math.max(0, sec | 0);
+  try {
+    localStorage.setItem(MAX_BREAK_SEC_KEY, String(state.maxBreakSec));
+  } catch {
+    /* ignore */
+  }
+  syncMaxBreakInputs();
+  if (state.phase === "break") updateBreakOverUI(state.phaseElapsedMs || 0);
+}
+
+function saveMaxSetSec(sec) {
+  state.maxSetSec = Math.max(0, sec | 0);
+  try {
+    localStorage.setItem(MAX_SET_SEC_KEY, String(state.maxSetSec));
+  } catch {
+    /* ignore */
+  }
+  syncMaxSetInputs();
+}
+
+function isSetOverLimit(durationMs, maxSec = state.maxSetSec) {
+  if (!maxSec || maxSec <= 0) return false;
+  return durationMs > maxSec * 1000;
+}
+
+/**
+ * Ask if user is still working a long set.
+ * Yes → keep going (no more prompts this set)
+ * No → choose End set or Keep going
+ */
+function maybePromptLongSet(elapsedMs) {
+  if (state.sessionPaused || state.phase !== "work") return;
+  if (state.setLongPromptAcked || state.setLongPromptOpen) return;
+  if (!isSetOverLimit(elapsedMs)) return;
+
+  state.setLongPromptOpen = true;
+  // Freeze timers while dialogs are up
+  const wasPaused = state.sessionPaused;
+  if (!wasPaused) {
+    freezeMainElapsed();
+    freezePhaseElapsed();
+    clearInterval(state.mainTimerId);
+    state.mainTimerId = null;
+    clearInterval(state.phaseTimerId);
+    state.phaseTimerId = null;
+    state.phaseStartedAt = null;
+    state.mainRunningSince = null;
+  }
+
+  const stillGoing = window.confirm(
+    "Are you still going?\n\nOK = Yes, keep going\nCancel = No"
+  );
+
+  if (stillGoing) {
+    state.setLongPromptAcked = true;
+    state.setLongPromptOpen = false;
+    if (!wasPaused) {
+      startMainTimer({ reset: false });
+      startPhaseTimer({
+        baseMs: state.phaseElapsedMs || state.phaseBaseMs || 0,
+        resetSetPrompt: false,
+      });
+    }
+    return;
+  }
+
+  const endSet = window.confirm(
+    "Keep going or end this set?\n\nOK = End the set (start break)\nCancel = Keep going"
+  );
+  state.setLongPromptOpen = false;
+
+  if (endSet) {
+    state.setLongPromptAcked = true;
+    if (!wasPaused) {
+      startMainTimer({ reset: false });
+    }
+    // End work phase → break (same as tapping the set button)
+    endCurrentSetToBreak();
+    return;
+  }
+
+  // Keep going
+  state.setLongPromptAcked = true;
+  if (!wasPaused) {
+    startMainTimer({ reset: false });
+    startPhaseTimer({
+      baseMs: state.phaseElapsedMs || state.phaseBaseMs || 0,
+      resetSetPrompt: false,
+    });
+  }
+}
+
+function endCurrentSetToBreak() {
+  const active = getActiveWorkout();
+  if (!active || state.phase !== "work") return;
+  const durationMs = stopPhaseTimer();
+  if (state.mergeIntoLastSegment) {
+    const last = [...(active.segments || [])].reverse().find((s) => s.type === "set");
+    if (last && last.number === state.setNumber) {
+      last.durationMs = (last.durationMs || 0) + durationMs;
+    } else {
+      active.segments.push({ type: "set", number: state.setNumber, durationMs });
+    }
+  } else {
+    active.segments.push({ type: "set", number: state.setNumber, durationMs });
+  }
+  state.mergeIntoLastSegment = false;
+  active.resumePartial = null;
+  state.phaseBaseMs = 0;
+  state.setLongPromptAcked = false;
+  renderLiveLog();
+  renderFinishedWorkouts();
+  state.phase = "break";
+  startPhaseTimer({ baseMs: 0 });
+  syncActiveFromState();
+  updateCycleButton();
+  updatePhaseCard();
+}
+
+function isBreakOverLimit(durationMs, maxSec = state.maxBreakSec) {
+  if (!maxSec || maxSec <= 0) return false;
+  return durationMs > maxSec * 1000;
+}
+
+function updateBreakOverUI(elapsedMs) {
+  if (!els.phaseCard) return;
+  const over = state.phase === "break" && isBreakOverLimit(elapsedMs);
+  els.phaseCard.classList.toggle("is-break-over", over);
+}
+
 function openSettings() {
   refreshSettingsTzDisplay();
   refreshSettingsClientInfo();
   if (els.toggleSessionNotes) els.toggleSessionNotes.checked = state.showSessionNotes;
   if (els.toggleStartTime) els.toggleStartTime.checked = state.showStartTime;
+  syncMaxBreakInputs();
+  syncMaxSetInputs();
   setBackupStatus("");
   // Reset accordion — none open by default
   document.querySelectorAll(".accordion-item.is-open").forEach((el) => {
@@ -764,40 +969,87 @@ function buildMetaHTML(session) {
   `;
 }
 
-function buildWorkoutsHTML(workouts) {
+function segmentIsOverBreak(seg) {
+  if (seg.type !== "break") return false;
+  if (seg.overMax) return true;
+  return isBreakOverLimit(seg.durationMs || 0);
+}
+
+/**
+ * Expandable movement list. Panel opens above the toggle (flex column-reverse)
+ * so the next row stays easy to reach without scrolling down.
+ */
+function renderExpandableWorkouts(container, workouts, { expandUp = true } = {}) {
+  container.innerHTML = "";
+  container.classList.add("movements-list");
+  if (expandUp) container.classList.add("expand-up");
+
   if (!workouts || workouts.length === 0) {
-    return `<p class="empty-note">No sets were recorded this session.</p>`;
+    const p = document.createElement("p");
+    p.className = "empty-note";
+    p.textContent = "No sets were recorded this session.";
+    container.appendChild(p);
+    return;
   }
-  return workouts
-    .map((workout) => {
-      const wi = workoutColorIndex(workout.number);
-      const title = workout.name
-        ? `Workout ${workout.number} · ${escapeHtml(workout.name)}`
-        : `Workout ${workout.number}`;
-      if (!workout.segments?.length) {
-        return `<div class="workout-block" data-workout="${wi}"><h2>${title}</h2><p class="empty-note">No sets or breaks.</p></div>`;
-      }
+
+  for (const workout of workouts) {
+    const wi = workoutColorIndex(workout.number);
+    const title = workout.name
+      ? escapeHtml(workout.name)
+      : `Workout ${workout.number}`;
+    const sets = (workout.segments || []).filter((s) => s.type === "set").length;
+
+    const block = document.createElement("div");
+    block.className = "workout-expand";
+    block.dataset.workout = String(wi);
+
+    const panel = document.createElement("div");
+    panel.className = "workout-expand-panel";
+
+    if (!workout.segments?.length) {
+      panel.innerHTML = `<p class="empty-note">No sets or breaks.</p>`;
+    } else {
       let setTime = 0;
       let breakTime = 0;
-      const rows = workout.segments
-        .map((seg) => {
-          if (seg.type === "set") setTime += seg.durationMs;
-          else breakTime += seg.durationMs;
-          const label = seg.type === "set" ? `Set ${seg.number}` : `Break after Set ${seg.number}`;
-          return `<div class="row ${seg.type === "set" ? "is-set" : "is-break"}"><span class="name ${seg.type}">${label}</span><span class="time">${formatMs(seg.durationMs)}</span></div>`;
-        })
-        .join("");
-      return `
-        <div class="workout-block" data-workout="${wi}">
-          <h2>${title}</h2>
-          ${rows}
-          <div class="totals">
-            <span>Work time: <strong style="color:var(--set)">${formatMs(setTime)}</strong></span>
-            <span>Break time: <strong style="color:var(--break)">${formatMs(breakTime)}</strong></span>
-          </div>
-        </div>`;
-    })
-    .join("");
+      for (const seg of workout.segments) {
+        if (seg.type === "set") setTime += seg.durationMs;
+        else breakTime += seg.durationMs;
+        const over = segmentIsOverBreak(seg);
+        const row = document.createElement("div");
+        row.className = `row ${seg.type === "set" ? "is-set" : "is-break"}${over ? " is-over" : ""}`;
+        const label =
+          seg.type === "set" ? `Set ${seg.number}` : `Break after Set ${seg.number}`;
+        row.innerHTML = `
+          <span class="name ${seg.type}${over ? " is-over" : ""}">${label}${over ? " · over" : ""}</span>
+          <span class="time">${formatMs(seg.durationMs)}</span>`;
+        panel.appendChild(row);
+      }
+      const totals = document.createElement("div");
+      totals.className = "totals";
+      totals.innerHTML = `
+        <span>Work time: <strong style="color:var(--set)">${formatMs(setTime)}</strong></span>
+        <span>Break time: <strong style="color:var(--break)">${formatMs(breakTime)}</strong></span>`;
+      panel.appendChild(totals);
+    }
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "workout-expand-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = `
+      <span>${title}<span style="font-weight:500;color:var(--text-muted);font-size:0.8rem"> · ${sets} set${sets === 1 ? "" : "s"}</span></span>
+      <svg class="chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+      </svg>`;
+    toggle.addEventListener("click", () => {
+      const open = block.classList.toggle("is-open");
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    // column-reverse: first child sits lower. Put toggle first so panel opens above it.
+    block.append(toggle, panel);
+    container.appendChild(block);
+  }
 }
 
 function buildSessionNoteMetaHTML(session) {
@@ -820,9 +1072,12 @@ function buildSessionNoteMetaHTML(session) {
 
 function fillSummaryContainers(metaEl, bodyEl, session) {
   metaEl.innerHTML = buildMetaHTML(session);
-  let body = buildWorkoutsHTML(session.workouts);
-  if (state.showSessionNotes) body += buildSessionNoteMetaHTML(session);
-  bodyEl.innerHTML = body;
+  bodyEl.innerHTML = "";
+  bodyEl.classList.add("summary-body", "expand-up");
+  renderExpandableWorkouts(bodyEl, session.workouts, { expandUp: true });
+  if (state.showSessionNotes) {
+    bodyEl.insertAdjacentHTML("beforeend", buildSessionNoteMetaHTML(session));
+  }
 }
 
 function updateSelectModeUI() {
@@ -982,12 +1237,14 @@ function renderHistory(openId = null) {
       range.className = "session-time-range";
       range.textContent = `${startTime} ~ ${endTime}`;
 
-      const meta = document.createElement("div");
-      meta.className = "summary-meta";
+      // Movements only (each expandable for set/break detail)
       const detail = document.createElement("div");
-      detail.className = "summary-body";
-      fillSummaryContainers(meta, detail, session);
-      body.append(range, meta, detail);
+      detail.className = "summary-body movements-only expand-up";
+      renderExpandableWorkouts(detail, session.workouts || [], { expandUp: true });
+      body.append(range, detail);
+      if (state.showSessionNotes) {
+        body.insertAdjacentHTML("beforeend", buildSessionNoteMetaHTML(session));
+      }
 
       toggle.addEventListener("click", () => {
         if (state.sessionSelectMode) {
@@ -1227,17 +1484,26 @@ function stopMainTimer() {
   state.sessionPaused = false;
 }
 
-function startPhaseTimer({ baseMs = 0 } = {}) {
+function startPhaseTimer({ baseMs = 0, resetSetPrompt = null } = {}) {
   state.phaseBaseMs = baseMs;
   state.phaseStartedAt = Date.now();
   state.phaseElapsedMs = baseMs;
   els.phaseTimer.textContent = formatMs(baseMs);
+  // Only clear the long-set prompt flag for a fresh set, not when resuming after the dialog
+  const doResetPrompt = resetSetPrompt === null ? baseMs === 0 && state.phase === "work" : resetSetPrompt;
+  if (doResetPrompt) {
+    state.setLongPromptAcked = false;
+    state.setLongPromptOpen = false;
+  }
   clearInterval(state.phaseTimerId);
   state.phaseTimerId = setInterval(() => {
-    if (state.sessionPaused) return;
+    if (state.sessionPaused || state.setLongPromptOpen) return;
     state.phaseElapsedMs = state.phaseBaseMs + (Date.now() - state.phaseStartedAt);
     els.phaseTimer.textContent = formatMs(state.phaseElapsedMs);
+    if (state.phase === "break") updateBreakOverUI(state.phaseElapsedMs);
+    if (state.phase === "work") maybePromptLongSet(state.phaseElapsedMs);
   }, 250);
+  if (state.phase === "break") updateBreakOverUI(state.phaseBaseMs || 0);
 }
 
 function freezePhaseElapsed() {
@@ -1383,10 +1649,8 @@ function requestPauseSession() {
     resumeSession();
     return;
   }
-  const ok = window.confirm(
-    "Do you want to pause the session?\n\nTimers will freeze until you resume."
-  );
-  if (ok) pauseSession();
+  // No confirmation — pause immediately
+  pauseSession();
 }
 
 // ── Active workout sync ──────────────────────────────────────────
@@ -1394,6 +1658,11 @@ function getLastSetNumber(workout) {
   const sets = (workout.segments || []).filter((s) => s.type === "set");
   if (!sets.length) return null;
   return sets[sets.length - 1].number;
+}
+
+function makeBreakSegment(number, durationMs) {
+  const overMax = isBreakOverLimit(durationMs);
+  return { type: "break", number, durationMs, overMax };
 }
 
 function commitPhaseIfRunning() {
@@ -1417,10 +1686,14 @@ function commitPhaseIfRunning() {
       const last = [...(active.segments || [])]
         .reverse()
         .find((s) => s.type === "break" && s.number === state.setNumber);
-      if (last) last.durationMs = (last.durationMs || 0) + durationMs;
-      else active.segments.push({ type: "break", number: state.setNumber, durationMs });
+      if (last) {
+        last.durationMs = (last.durationMs || 0) + durationMs;
+        last.overMax = isBreakOverLimit(last.durationMs);
+      } else {
+        active.segments.push(makeBreakSegment(state.setNumber, durationMs));
+      }
     } else {
-      active.segments.push({ type: "break", number: state.setNumber, durationMs });
+      active.segments.push(makeBreakSegment(state.setNumber, durationMs));
     }
   }
   state.phase = "idle";
@@ -1508,13 +1781,24 @@ function pauseActiveWorkout() {
 // ── UI updates ───────────────────────────────────────────────────
 function updateCycleButton() {
   const btn = els.btnCycle;
+  if (!btn) return;
   const active = getActiveWorkout();
   const name = active?.name || "";
-  btn.classList.remove("is-work-mode", "is-break-mode");
+  btn.classList.remove("is-work-mode", "is-break-mode", "is-name-next");
+
+  // After canceling next-movement name: Start is active & highlighted for naming again
+  if (state.awaitingNextMovement && !active) {
+    btn.disabled = state.sessionPaused;
+    btn.textContent = "Start";
+    btn.classList.add("is-work-mode", "is-name-next");
+    return;
+  }
+
   const blocked = state.sessionPaused || !active || active.status === "finished";
   btn.disabled = blocked;
+  // Never put movement name on the button — name is already above the timer
   if (state.phase === "idle") {
-    btn.textContent = name ? `${name} · Start` : "Start";
+    btn.textContent = "Start";
   } else if (state.phase === "work") {
     btn.textContent = `Set ${state.setNumber}`;
     btn.classList.add("is-work-mode");
@@ -1526,7 +1810,7 @@ function updateCycleButton() {
 
 function updatePhaseCard() {
   const card = els.phaseCard;
-  card.classList.remove("is-work", "is-break", "is-idle");
+  card.classList.remove("is-work", "is-break", "is-idle", "is-break-over");
   if (state.phase === "idle") {
     card.classList.add("is-idle");
     els.phaseLabel.textContent = "Ready";
@@ -1537,35 +1821,54 @@ function updatePhaseCard() {
   } else {
     card.classList.add("is-break");
     els.phaseLabel.textContent = "Break";
+    updateBreakOverUI(state.phaseElapsedMs || state.phaseBaseMs || 0);
   }
 }
 
 function updateSessionTitle() {
   const active = getActiveWorkout();
   if (!active) {
+    if (state.awaitingNextMovement) {
+      els.sessionTitle.textContent = "Next movement";
+      els.sessionTitle.removeAttribute("data-workout");
+      if (els.sessionMovement) {
+        els.sessionMovement.classList.remove("hidden");
+        els.sessionMovement.textContent = "Tap Continue or Start to name the next exercise";
+      }
+      if (els.btnFinishExercise) {
+        els.btnFinishExercise.textContent = "Continue";
+        els.btnFinishExercise.disabled = state.sessionPaused;
+        els.btnFinishExercise.classList.add("is-continue-mode");
+      }
+      return;
+    }
     els.sessionTitle.textContent = "Next workout";
     els.sessionTitle.removeAttribute("data-workout");
     if (els.sessionMovement) {
+      els.sessionMovement.classList.remove("hidden");
       els.sessionMovement.textContent = "Name the next movement to continue";
     }
     if (els.btnFinishExercise) {
       els.btnFinishExercise.textContent = "Finish";
       els.btnFinishExercise.disabled = true;
+      els.btnFinishExercise.classList.remove("is-continue-mode");
     }
     if (els.btnCycle) els.btnCycle.disabled = true;
     return;
   }
   const n = active.number;
-  const name = (active.name || "").trim() || `Workout ${n}`;
-  // Primary title becomes the movement name (not "Workout 1")
+  const name = (active.name || "").trim() || `movement ${n}`;
+  // Show only the movement name (no "Workout 1" subtitle)
   els.sessionTitle.textContent = name;
   els.sessionTitle.dataset.workout = String(workoutColorIndex(n));
   if (els.sessionMovement) {
-    els.sessionMovement.textContent = `Workout ${n}`;
+    els.sessionMovement.textContent = "";
+    els.sessionMovement.classList.add("hidden");
   }
   if (els.btnFinishExercise) {
-    els.btnFinishExercise.textContent = `Finish ${name}`;
+    els.btnFinishExercise.textContent = "Finish";
     els.btnFinishExercise.disabled = false;
+    els.btnFinishExercise.classList.remove("is-continue-mode");
   }
   if (els.btnCycle) els.btnCycle.disabled = false;
 }
@@ -1584,11 +1887,15 @@ function renderLiveLog() {
   }
   wrap?.classList.remove("hidden");
   for (const seg of segments) {
+    const over = segmentIsOverBreak(seg);
     const li = document.createElement("li");
-    li.className = seg.type === "set" ? "is-set" : "is-break";
+    li.className = `${seg.type === "set" ? "is-set" : "is-break"}${over ? " is-over" : ""}`;
     const kind = document.createElement("span");
     kind.className = `kind ${seg.type}`;
-    kind.textContent = seg.type === "set" ? `Set ${seg.number}` : `Break ${seg.number}`;
+    kind.textContent =
+      seg.type === "set"
+        ? `Set ${seg.number}`
+        : `Break ${seg.number}${over ? " · over" : ""}`;
     const dur = document.createElement("span");
     dur.className = "dur";
     dur.textContent = formatMs(seg.durationMs);
@@ -1608,9 +1915,13 @@ function buildWorkoutStatsHTML(workout) {
     .map((seg) => {
       if (seg.type === "set") setTime += seg.durationMs;
       else breakTime += seg.durationMs;
-      const label = seg.type === "set" ? `Set ${seg.number}` : `Break ${seg.number}`;
+      const over = segmentIsOverBreak(seg);
+      const label =
+        seg.type === "set"
+          ? `Set ${seg.number}`
+          : `Break ${seg.number}${over ? " · over" : ""}`;
       return `
-        <div class="stat-row ${seg.type === "set" ? "is-set" : "is-break"}">
+        <div class="stat-row ${seg.type === "set" ? "is-set" : "is-break"}${over ? " is-over" : ""}">
           <span>${label}</span>
           <span class="time">${formatMs(seg.durationMs)}</span>
         </div>`;
@@ -1624,6 +1935,30 @@ function buildWorkoutStatsHTML(workout) {
     </div>`;
 }
 
+function updateSessionWorkoutsDropdownUI() {
+  const wrap = els.finishedWorkouts;
+  const panel = els.sessionWorkoutsPanel;
+  const btn = els.btnSessionWorkoutsToggle;
+  if (!wrap || !panel || !btn) return;
+
+  const n = state.workouts.length;
+  if (els.sessionWorkoutsToggleLabel) {
+    // No "Workouts this session" title — empty label, chevron only (optional count for a11y via aria)
+    els.sessionWorkoutsToggleLabel.textContent = "";
+  }
+  btn.setAttribute("aria-label", n ? `Session movements (${n})` : "Session movements");
+  btn.setAttribute("aria-expanded", state.sessionWorkoutsOpen ? "true" : "false");
+  wrap.classList.toggle("is-open", state.sessionWorkoutsOpen);
+  panel.classList.toggle("hidden", !state.sessionWorkoutsOpen);
+  // Hide entire control when no movements yet
+  wrap.classList.toggle("hidden", n === 0 && !state.sessionPaused);
+}
+
+function toggleSessionWorkoutsDropdown() {
+  state.sessionWorkoutsOpen = !state.sessionWorkoutsOpen;
+  updateSessionWorkoutsDropdownUI();
+}
+
 function renderFinishedWorkouts() {
   const list = els.finishedList;
   if (!list) return;
@@ -1634,6 +1969,8 @@ function renderFinishedWorkouts() {
   state.expandedWorkoutIds = new Set(
     [...state.expandedWorkoutIds].filter((id) => ids.has(id))
   );
+
+  updateSessionWorkoutsDropdownUI();
   if (ordered.length === 0) return;
 
   for (const w of ordered) {
@@ -1644,19 +1981,15 @@ function renderFinishedWorkouts() {
     if (state.expandedWorkoutIds.has(w.id)) li.classList.add("is-expanded");
     li.dataset.workout = String(workoutColorIndex(w.number));
 
-    const sets = (w.segments || []).filter((s) => s.type === "set").length;
-    const breaks = (w.segments || []).filter((s) => s.type === "break").length;
-
     const head = document.createElement("button");
     head.type = "button";
     head.className = "fw-item-head";
     head.setAttribute("aria-expanded", state.expandedWorkoutIds.has(w.id) ? "true" : "false");
+    // Index number beside name only — no set/break counts
     head.innerHTML = `
       <div class="fw-main">
-        <span class="fw-name">${escapeHtml(w.name || `Workout ${w.number}`)}</span>
-        <span class="fw-meta">Workout ${w.number} · ${sets} set${sets === 1 ? "" : "s"} · ${breaks} break${breaks === 1 ? "" : "s"} · ${w.status}</span>
+        <span class="fw-name"><span class="fw-index">${w.number}.</span> ${escapeHtml(w.name || "movement")}</span>
       </div>
-      <span class="fw-badge ${w.status}">${w.status}</span>
       <svg class="fw-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
       </svg>
@@ -1679,7 +2012,6 @@ function renderFinishedWorkouts() {
     });
     actions.appendChild(edit);
 
-    // Put edit outside head so expand doesn't steal edit clicks
     const top = document.createElement("div");
     top.style.display = "flex";
     top.style.alignItems = "stretch";
@@ -1772,10 +2104,25 @@ function closeNameModal() {
   hideNameSuggestions();
   // If user cancelled naming the first workout, stay on start screen
   if (mode === "start" && !state.workouts.length) {
+    state.awaitingNextMovement = false;
     showScreen("start");
   }
-  // If cancelled naming next, they can Edit → Continue a finished workout or try Start again
+  // Cancelled naming the next movement — keep session open; Continue / Start reopen naming
+  if (mode === "next") {
+    state.awaitingNextMovement = true;
+    state.activeWorkoutId = null;
+    state.phase = "idle";
+  }
   refreshActiveUI();
+}
+
+/** Open the next-movement name dialog (from Continue or Start while waiting). */
+function requestNameNextMovement() {
+  if (state.sessionPaused) {
+    window.alert("Resume the session before starting the next movement.");
+    return;
+  }
+  openNameModal("next");
 }
 
 // ── Movement name history / suggestions ──────────────────────────
@@ -1958,6 +2305,7 @@ function confirmNameWorkout() {
     state.mainElapsedMs = 0;
     state.sessionPaused = false;
     state.mergeIntoLastSegment = false;
+    state.awaitingNextMovement = false;
     const w = {
       id: uid(),
       number: 1,
@@ -1972,7 +2320,11 @@ function confirmNameWorkout() {
     state.activeWorkoutId = w.id;
     state.phase = "idle";
     state.setNumber = 1;
-    closeNameModal();
+    // Confirm without going through cancel path
+    state.nameModalMode = null;
+    closeModal(els.nameWorkoutModal);
+    resetNameHelp();
+    hideNameSuggestions();
     showScreen("active");
     refreshActiveUI();
     // 3-2-1 only at the beginning of a session
@@ -1999,8 +2351,13 @@ function confirmNameWorkout() {
     state.phase = "idle";
     state.setNumber = 1;
     state.mergeIntoLastSegment = false;
+    state.awaitingNextMovement = false;
+    // Confirm next name without treating close as cancel
+    state.nameModalMode = null;
+    closeModal(els.nameWorkoutModal);
+    resetNameHelp();
+    hideNameSuggestions();
     refreshActiveUI();
-    closeNameModal();
   }
 }
 
@@ -2102,7 +2459,7 @@ function onEditRestart() {
 function onEditRemove() {
   const target = getEditingWorkout();
   if (!target) return;
-  if (!window.confirm(`Remove Workout ${target.number} · ${target.name}?`)) return;
+  if (!window.confirm(`Remove ${target.name || "this movement"}?`)) return;
 
   const wasActive = target.id === state.activeWorkoutId;
   if (wasActive) {
@@ -2111,21 +2468,23 @@ function onEditRemove() {
 
   state.workouts = state.workouts.filter((w) => w.id !== target.id);
 
+  // No movements left in this session → back to Start Workout home screen
+  if (state.workouts.length === 0) {
+    closeEditWorkout();
+    resetSession();
+    return;
+  }
+
   if (wasActive) {
-    // Prefer a paused workout, else any remaining, else name a new one
+    // Prefer a paused workout, else any remaining
     const next =
       state.workouts.find((w) => w.status === "paused") ||
+      state.workouts.find((w) => w.status === "active") ||
       state.workouts.find((w) => w.status === "finished") ||
       state.workouts[0];
     if (next) {
       loadActiveIntoState(next);
       next.status = "active";
-    } else {
-      state.activeWorkoutId = null;
-      closeEditWorkout();
-      openNameModal("next");
-      refreshActiveUI();
-      return;
     }
   }
   refreshActiveUI();
@@ -2142,9 +2501,14 @@ function onStartWorkoutClick(e) {
 
 function onCyclePress() {
   if (state.sessionPaused) return;
+  // Between movements after cancel — Start reopens naming
+  if (state.awaitingNextMovement && !getActiveWorkout()) {
+    requestNameNextMovement();
+    return;
+  }
   const active = getActiveWorkout();
   if (!active || active.status === "finished") {
-    if (!active) openNameModal("next");
+    if (!active) requestNameNextMovement();
     return;
   }
 
@@ -2176,37 +2540,17 @@ function onCyclePress() {
   }
 
   if (state.phase === "work") {
-    // commit work (merge if resuming same set)
-    const durationMs = stopPhaseTimer();
-    if (state.mergeIntoLastSegment) {
-      const last = [...(active.segments || [])].reverse().find((s) => s.type === "set");
-      if (last && last.number === state.setNumber) {
-        last.durationMs = (last.durationMs || 0) + durationMs;
-      } else {
-        active.segments.push({ type: "set", number: state.setNumber, durationMs });
-      }
-    } else {
-      active.segments.push({ type: "set", number: state.setNumber, durationMs });
-    }
-    state.mergeIntoLastSegment = false;
-    active.resumePartial = null;
-    state.phaseBaseMs = 0;
-    renderLiveLog();
-    renderFinishedWorkouts();
-    state.phase = "break";
-    startPhaseTimer({ baseMs: 0 });
-    syncActiveFromState();
-    updateCycleButton();
-    updatePhaseCard();
+    endCurrentSetToBreak();
     return;
   }
 
   if (state.phase === "break") {
     const durationMs = stopPhaseTimer();
-    active.segments.push({ type: "break", number: state.setNumber, durationMs });
+    active.segments.push(makeBreakSegment(state.setNumber, durationMs));
     active.resumePartial = null;
     state.phaseBaseMs = 0;
     state.mergeIntoLastSegment = false;
+    els.phaseCard?.classList.remove("is-break-over");
     renderLiveLog();
     renderFinishedWorkouts();
     state.setNumber += 1;
@@ -2223,6 +2567,11 @@ function onFinishExercise() {
     window.alert("Resume the session before finishing a movement.");
     return;
   }
+  // Between movements: Continue reopens the name dialog
+  if (state.awaitingNextMovement && !getActiveWorkout()) {
+    requestNameNextMovement();
+    return;
+  }
   const active = getActiveWorkout();
   if (!active) return;
   commitPhaseIfRunning();
@@ -2236,15 +2585,46 @@ function onFinishExercise() {
   state.setNumber = 1;
   state.mergeIntoLastSegment = false;
   state.phaseBaseMs = 0;
+  state.awaitingNextMovement = true;
   refreshActiveUI();
   openNameModal("next");
 }
 
 function onFinishSession() {
+  // Freeze timers while the confirm dialog is open so cancel doesn't "eat" that time
+  const wasPaused = state.sessionPaused;
+  let frozeForDialog = false;
+  if (!wasPaused) {
+    freezeMainElapsed();
+    if (state.phase !== "idle") {
+      freezePhaseElapsed();
+      clearInterval(state.phaseTimerId);
+      state.phaseTimerId = null;
+      state.phaseStartedAt = null;
+    }
+    clearInterval(state.mainTimerId);
+    state.mainTimerId = null;
+    state.mainRunningSince = null;
+    frozeForDialog = true;
+  }
+
   const ok = window.confirm(
     "Are you sure you're finished with today's workout?\n\nThis will end the session and show your summary."
   );
-  if (!ok) return;
+
+  if (!ok) {
+    // User cancelled — resume counting from frozen elapsed
+    if (frozeForDialog) {
+      startMainTimer({ reset: false });
+      if (state.phase !== "idle") {
+        startPhaseTimer({
+          baseMs: state.phaseElapsedMs || state.phaseBaseMs || 0,
+          resetSetPrompt: false,
+        });
+      }
+    }
+    return;
+  }
 
   const active = getActiveWorkout();
   if (active) {
@@ -2256,8 +2636,14 @@ function onFinishSession() {
   const session = buildSessionRecord();
   if (session.workouts.length === 0 && state.workouts.every((w) => !w.segments?.length)) {
     if (!window.confirm("No sets were recorded. End session anyway?")) {
-      if (!state.mainTimerId && state.workoutStartedAt) {
+      if (frozeForDialog || !state.mainTimerId) {
         startMainTimer({ reset: false });
+        if (state.phase !== "idle") {
+          startPhaseTimer({
+            baseMs: state.phaseElapsedMs || state.phaseBaseMs || 0,
+            resetSetPrompt: false,
+          });
+        }
       }
       return;
     }
@@ -2320,6 +2706,7 @@ function resetSession() {
   state.mergeIntoLastSegment = false;
   state.sessionPaused = false;
   state.canResumeSession = false;
+  state.awaitingNextMovement = false;
   state.phase = "idle";
   state.setNumber = 1;
   state.workouts = [];
@@ -2344,6 +2731,7 @@ function bindAppEvents() {
 
   els.btnStartWorkout?.addEventListener("click", onStartWorkoutClick);
   els.btnCycle?.addEventListener("click", onCyclePress);
+  els.btnSessionWorkoutsToggle?.addEventListener("click", toggleSessionWorkoutsDropdown);
   els.btnPauseSession?.addEventListener("click", requestPauseSession);
   els.btnResumeOverlay?.addEventListener("click", resumeSession);
   els.btnFinishExercise?.addEventListener("click", onFinishExercise);
@@ -2394,6 +2782,16 @@ function bindAppEvents() {
   els.btnSettings?.addEventListener("click", openSettings);
   els.toggleSessionNotes?.addEventListener("change", (e) => setShowSessionNotes(e.target.checked));
   els.toggleStartTime?.addEventListener("change", (e) => setShowStartTime(e.target.checked));
+  const onMaxBreakInput = () => saveMaxBreakSec(readMaxBreakFromInputs());
+  const onMaxSetInput = () => saveMaxSetSec(readMaxSetFromInputs());
+  els.inputMaxBreakMin?.addEventListener("change", onMaxBreakInput);
+  els.inputMaxBreakSec?.addEventListener("change", onMaxBreakInput);
+  els.inputMaxBreakMin?.addEventListener("blur", onMaxBreakInput);
+  els.inputMaxBreakSec?.addEventListener("blur", onMaxBreakInput);
+  els.inputMaxSetMin?.addEventListener("change", onMaxSetInput);
+  els.inputMaxSetSec?.addEventListener("change", onMaxSetInput);
+  els.inputMaxSetMin?.addEventListener("blur", onMaxSetInput);
+  els.inputMaxSetSec?.addEventListener("blur", onMaxSetInput);
   els.btnGlobeTz?.addEventListener("click", openTzPicker);
   els.btnOpenTzPicker?.addEventListener("click", openTzPicker);
   els.tzPrev?.addEventListener("click", () => shiftPicker(-1));
