@@ -10,77 +10,357 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <div class="app">
-    <!-- Main workout timer (top-left, visible once workout starts) -->
-    <div id="main-timer" class="main-timer hidden" aria-live="polite">
-      <span class="main-timer-label">Workout</span>
-      <span id="main-timer-value" class="main-timer-value">00:00</span>
+  <!-- Settings gear -->
+  <button id="btn-settings" class="settings-btn" type="button" aria-label="Settings" title="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  </button>
+
+  <!-- Sessions drawer tab -->
+  <button id="btn-sessions-tab" class="sessions-tab" type="button" aria-expanded="false" aria-controls="sessions-drawer" title="Sessions">
+    <span class="sessions-tab-arrow" aria-hidden="true">›</span>
+    <span class="sessions-tab-label">Sessions</span>
+  </button>
+
+  <div id="sessions-backdrop" class="sessions-backdrop hidden" aria-hidden="true"></div>
+
+  <!-- Sessions slide-out drawer -->
+  <aside id="sessions-drawer" class="sessions-drawer" aria-label="Past sessions" aria-hidden="true">
+    <div class="history-header">
+      <h2>Sessions</h2>
+      <button id="btn-sessions-close" class="modal-close" type="button" aria-label="Close sessions">×</button>
     </div>
+    <p class="history-sub">Previous sessions · tap a date to expand</p>
+    <div id="history-list" class="history-list">
+      <p class="history-empty" id="history-empty">No finished sessions yet.</p>
+    </div>
+    <div class="history-footer">
+      <button id="btn-export-sessions-side" class="btn btn-backup btn-sm" type="button">Export</button>
+      <button id="btn-import-sessions-side" class="btn btn-backup btn-backup-secondary btn-sm" type="button">Import</button>
+      <button id="btn-clear-history" class="btn btn-ghost btn-sm" type="button">Clear</button>
+    </div>
+  </aside>
 
-    <!-- Screen: Pre-start -->
-    <section id="screen-start" class="screen">
-      <header class="header">
-        <p class="eyebrow">Workout Counter</p>
-        <h1>Ready when you are</h1>
+  <!-- Settings modal (accordion sections) -->
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-backdrop" data-close="settings"></div>
+    <div class="modal-panel">
+      <header class="modal-header">
+        <h2 id="settings-title">Settings</h2>
+        <button type="button" class="modal-close" data-close="settings" aria-label="Close settings">×</button>
+      </header>
+      <div class="settings-body settings-accordion">
+        <!-- Timezone -->
+        <div class="accordion-item" data-accordion="timezone">
+          <button type="button" class="accordion-trigger" aria-expanded="false">
+            <span>Timezone</span>
+            <span class="accordion-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <button id="btn-open-tz-picker" class="tz-current-btn" type="button">
+              <span class="tz-current-main">
+                <span id="settings-tz-region">United States (Eastern)</span>
+                <span id="settings-tz-id" class="tz-id">America/New_York</span>
+              </span>
+              <span id="settings-tz-offset" class="tz-offset-badge">UTC−5</span>
+              <span class="tz-chevron" aria-hidden="true">›</span>
+            </button>
+            <p class="settings-hint">Tap to open the world map and pick a zone.</p>
+          </div>
+        </div>
+
+        <!-- Display -->
+        <div class="accordion-item" data-accordion="display">
+          <button type="button" class="accordion-trigger" aria-expanded="false">
+            <span>Display</span>
+            <span class="accordion-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <label class="settings-toggle" for="toggle-session-notes">
+              <span class="settings-toggle-text">
+                <span class="settings-toggle-title">Show session notes</span>
+                <span class="settings-toggle-hint">Browser, device, and timezone under each session</span>
+              </span>
+              <input id="toggle-session-notes" type="checkbox" />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Backup -->
+        <div class="accordion-item" data-accordion="backup">
+          <button type="button" class="accordion-trigger" aria-expanded="false">
+            <span>Backup &amp; restore</span>
+            <span class="accordion-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="accordion-panel">
+            <p id="settings-client-info" class="settings-client-info">Detecting browser…</p>
+            <div class="backup-actions">
+              <button id="btn-export-sessions" class="btn btn-backup" type="button">Export sessions</button>
+              <button id="btn-import-sessions" class="btn btn-backup btn-backup-secondary" type="button">Import sessions</button>
+              <input id="import-file-input" type="file" accept=".json,application/json" class="hidden" />
+            </div>
+            <p class="settings-hint">
+              Downloads a <strong>.json</strong> file for phone or PC. Import later if browser data is cleared.
+            </p>
+            <p id="backup-status" class="backup-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Name movement modal -->
+  <div id="name-workout-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="name-workout-title">
+    <div class="modal-backdrop" data-close="name-workout"></div>
+    <div class="modal-panel modal-panel-sm">
+      <header class="modal-header">
+        <h2 id="name-workout-title">Name this movement</h2>
+        <button type="button" class="modal-close" data-close="name-workout" aria-label="Cancel">×</button>
+      </header>
+      <p class="settings-hint" id="name-workout-hint">What exercise is this workout?</p>
+      <label class="field-label" for="input-workout-name">Movement name</label>
+      <input id="input-workout-name" class="text-input" type="text" maxlength="60" placeholder="e.g. Bench Press" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="btn-name-cancel" class="btn btn-ghost" type="button" data-close="name-workout">Cancel</button>
+        <button id="btn-name-confirm" class="btn btn-start" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit workout modal -->
+  <div id="edit-workout-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-workout-title">
+    <div class="modal-backdrop" data-close="edit-workout"></div>
+    <div class="modal-panel modal-panel-sm">
+      <header class="modal-header">
+        <h2 id="edit-workout-title">Edit workout</h2>
+        <button type="button" class="modal-close" data-close="edit-workout" aria-label="Close">×</button>
+      </header>
+      <label class="field-label" for="input-edit-name">Name</label>
+      <input id="input-edit-name" class="text-input" type="text" maxlength="60" autocomplete="off" />
+      <div class="edit-actions">
+        <button id="btn-edit-save-name" class="btn btn-start" type="button">Save name</button>
+        <button id="btn-edit-continue" class="btn btn-backup" type="button">Continue</button>
+        <button id="btn-edit-restart" class="btn btn-finish-exercise" type="button">Restart</button>
+        <button id="btn-edit-remove" class="btn btn-finish-workout" type="button">Remove</button>
+      </div>
+      <p class="settings-hint">Continue or Restart will pause the workout you are on now.</p>
+    </div>
+  </div>
+
+  <!-- Timezone map picker -->
+  <div id="tz-picker-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tz-picker-title">
+    <div class="modal-backdrop" data-close="tz-picker"></div>
+    <div class="modal-panel modal-panel-wide">
+      <header class="modal-header">
+        <h2 id="tz-picker-title">Select timezone</h2>
+        <button type="button" class="modal-close" data-close="tz-picker" aria-label="Close timezone picker">×</button>
       </header>
 
-      <div class="date-card">
-        <p class="date-label">Today · United States (Eastern)</p>
-        <p id="current-date" class="date-value"></p>
-        <p id="current-time" class="time-value"></p>
-        <p class="timezone-note">Timezone: America/New_York</p>
-      </div>
-
-      <button id="btn-start-workout" class="btn btn-primary btn-lg" type="button">
-        Start Workout
-      </button>
-    </section>
-
-    <!-- Screen: Active session -->
-    <section id="screen-active" class="screen hidden">
-      <header class="header header-compact">
-        <p class="eyebrow">In session</p>
-        <h1 id="session-title">Workout 1</h1>
-      </header>
-
-      <div class="phase-card" id="phase-card">
-        <p id="phase-label" class="phase-label">Press Start to begin</p>
-        <p id="phase-timer" class="phase-timer">00:00</p>
-        <p id="phase-hint" class="phase-hint">Movement time for this set</p>
-      </div>
-
-      <div class="controls">
-        <button id="btn-cycle" class="btn btn-primary btn-lg" type="button">
-          Workout 1 · Start
+      <div class="tz-map-row">
+        <button id="tz-prev" class="tz-arrow" type="button" aria-label="Previous timezone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </button>
-        <button id="btn-finish-exercise" class="btn btn-secondary" type="button">
-          Finish
-        </button>
-        <button id="btn-finish-workout" class="btn btn-danger" type="button">
-          Finish Workout
+
+        <div class="tz-map-frame" id="tz-map-frame">
+          <div class="tz-map" id="tz-map" role="img" aria-label="World map timezone selector">
+            <svg class="tz-map-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0d2840" />
+                  <stop offset="100%" stop-color="#0a1a2c" />
+                </linearGradient>
+                <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#2a4a3a" />
+                  <stop offset="100%" stop-color="#1a3328" />
+                </linearGradient>
+              </defs>
+              <rect width="1000" height="500" fill="url(#ocean)" />
+              <g fill="url(#land)" opacity="0.92">
+                <path d="M95 95c25-20 55-30 95-28 40 2 70 18 95 40 18 16 28 35 22 58-8 30-35 48-62 62-20 10-48 22-55 45-5 18 5 35 22 42 12 5 8 28-8 32-28 7-55-12-72-35-22-30-35-68-42-105-5-28-5-55 5-78z" />
+                <path d="M155 280c18 8 35 28 32 48-4 22-28 35-48 32-18-3-32-22-30-40 2-18 25-48 46-40z" />
+                <path d="M250 300c22-5 42 8 52 28 12 25 18 55 12 85-5 28-22 55-45 68-18 10-38 5-48-12-12-22-15-55-12-85 4-32 18-72 41-84z" />
+                <path d="M480 95c22-8 48-5 65 12 15 15 18 38 8 55-12 20-35 28-55 25-22-3-42-22-45-42-2-18 10-42 27-50z" />
+                <path d="M490 175c28-8 58 0 75 22 18 25 28 58 22 92-5 32-28 62-58 75-25 10-52 5-68-15-18-22-22-55-18-88 5-35 20-72 47-86z" />
+                <path d="M560 70c55-18 120-15 175 12 48 24 85 65 95 118 8 42-5 85-35 112-28 25-68 35-105 28-42-8-78-35-95-72-18-38-22-85-8-125 8-25 28-55  -27-73z" />
+                <path d="M680 250c22 5 38 28 35 52-4 22-25 38-45 35-18-2-32-20-30-38 2-20 18-55 40-49z" />
+                <path d="M780 340c35-12 72 0 88 28 12 22 8 52-12 68-22 18-55 22-82 12-28-10-45-38-42-65 2-22 20-35 48-43z" />
+                <path d="M850 175c12-2 22 10 20 22-2 12-15 20-26 18-10-2-18-14-15-25 2-8 12-14 21-15z" />
+                <path d="M900 400c10-2 18 8 15 18-3 10-14 15-22 12-8-2-12-12-8-20 3-6 8-9 15-10z" />
+                <path d="M320 45c18-12 42-8 52 10 8 15 2 35-15 42-18 8-42 0-50-18-6-14 0-28 13-34z" />
+              </g>
+              <g stroke="rgba(255,255,255,0.06)" stroke-width="1">
+                <line x1="0" y1="0" x2="0" y2="500" /><line x1="125" y1="0" x2="125" y2="500" />
+                <line x1="250" y1="0" x2="250" y2="500" /><line x1="375" y1="0" x2="375" y2="500" />
+                <line x1="500" y1="0" x2="500" y2="500" /><line x1="625" y1="0" x2="625" y2="500" />
+                <line x1="750" y1="0" x2="750" y2="500" /><line x1="875" y1="0" x2="875" y2="500" />
+                <line x1="1000" y1="0" x2="1000" y2="500" />
+              </g>
+              <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+                <line x1="0" y1="125" x2="1000" y2="125" />
+                <line x1="0" y1="250" x2="1000" y2="250" />
+                <line x1="0" y1="375" x2="1000" y2="375" />
+              </g>
+            </svg>
+            <div id="tz-band" class="tz-band" aria-hidden="true"></div>
+            <div id="tz-tooltip" class="tz-tooltip" role="tooltip">
+              <strong id="tz-tooltip-name">—</strong>
+              <span id="tz-tooltip-time">—</span>
+            </div>
+          </div>
+          <div class="tz-map-labels">
+            <span>W</span><span>← longitude →</span><span>E</span>
+          </div>
+        </div>
+
+        <button id="tz-next" class="tz-arrow" type="button" aria-label="Next timezone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
         </button>
       </div>
 
-      <div class="live-log" id="live-log" aria-label="Sets and breaks so far">
-        <p class="live-log-title">This workout</p>
-        <ul id="live-log-list"></ul>
+      <div class="tz-preview" id="tz-preview">
+        <p id="tz-picker-region" class="tz-picker-region">United States (Eastern)</p>
+        <p id="tz-picker-id" class="tz-picker-id">America/New_York</p>
+        <div class="tz-preview-meta">
+          <span id="tz-picker-offset" class="tz-offset-badge">UTC−5</span>
+          <span id="tz-picker-time" class="tz-picker-time">—</span>
+        </div>
+        <p class="tz-wrap-hint">Arrows wrap: westmost ↔ eastmost in one tap</p>
       </div>
-    </section>
 
-    <!-- Screen: Summary -->
-    <section id="screen-summary" class="screen hidden">
-      <header class="header">
-        <p class="eyebrow">Session complete</p>
-        <h1>Workout Summary</h1>
-      </header>
+      <button id="tz-confirm" class="btn btn-start btn-lg" type="button">Use this timezone</button>
+    </div>
+  </div>
 
-      <div class="summary-meta" id="summary-meta"></div>
-      <div class="summary-body" id="summary-body"></div>
+  <div class="layout layout-full">
+    <div class="app">
+      <div id="main-timer" class="main-timer hidden" aria-live="polite">
+        <span class="main-timer-label">Total</span>
+        <span id="main-timer-value" class="main-timer-value">00:00</span>
+      </div>
 
-      <button id="btn-new-session" class="btn btn-primary btn-lg" type="button">
-        New Session
-      </button>
-    </section>
+      <!-- Screen: Pre-start -->
+      <section id="screen-start" class="screen">
+        <header class="header">
+          <p class="eyebrow">Workout Counter</p>
+          <h1>Ready when you are</h1>
+        </header>
+
+        <div class="date-card">
+          <p id="date-label" class="date-label">Today · United States (Eastern)</p>
+          <p id="current-date" class="date-value"></p>
+          <p id="current-time" class="time-value"></p>
+          <p id="timezone-note" class="timezone-note">Timezone: America/New_York</p>
+        </div>
+
+        <div class="legend">
+          <span class="legend-item legend-set"><i></i> Set</span>
+          <span class="legend-item legend-break"><i></i> Break</span>
+          <span class="legend-item legend-workout"><i></i> Workout</span>
+          <span class="legend-item legend-finish"><i></i> End</span>
+        </div>
+
+        <button id="btn-start-workout" class="btn btn-start btn-lg" type="button">
+          Start Workout
+        </button>
+      </section>
+
+      <!-- Screen: Active session -->
+      <section id="screen-active" class="screen hidden">
+        <header class="header header-compact">
+          <p class="eyebrow">In session</p>
+          <div class="session-title-row">
+            <h1 id="session-title" class="session-title">Movement</h1>
+            <button id="btn-edit-current" class="btn-edit-mini" type="button" title="Edit current workout">Edit</button>
+          </div>
+          <p id="session-movement" class="session-movement">Workout 1</p>
+        </header>
+
+        <div class="phase-card" id="phase-card">
+          <div id="phase-icon" class="phase-icon" aria-hidden="true">
+            <div class="icon-anim icon-dumbbell" data-icon="work">
+              <svg viewBox="0 0 64 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g class="dumbbell-lift">
+                  <rect class="db-weight" x="2" y="10" width="10" height="20" rx="2" />
+                  <rect class="db-weight" x="12" y="14" width="6" height="12" rx="1.5" />
+                  <rect class="db-bar" x="18" y="17" width="28" height="6" rx="2" />
+                  <rect class="db-weight" x="46" y="14" width="6" height="12" rx="1.5" />
+                  <rect class="db-weight" x="52" y="10" width="10" height="20" rx="2" />
+                </g>
+              </svg>
+            </div>
+            <div class="icon-anim icon-snooze" data-icon="break">
+              <svg viewBox="0 0 72 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g class="snooze-body">
+                  <ellipse class="sn-pillow" cx="30" cy="36" rx="22" ry="8" />
+                  <circle class="sn-head" cx="30" cy="24" r="12" />
+                  <path class="sn-eye" d="M24 23c2 2 6 2 8 0" stroke-width="1.8" stroke-linecap="round" />
+                  <path class="sn-smile" d="M27 28c1.5 1.5 4.5 1.5 6 0" stroke-width="1.5" stroke-linecap="round" />
+                </g>
+                <g class="zzz-group">
+                  <g class="zzz-wrap zzz-1"><text class="zzz" x="48" y="18">z</text></g>
+                  <g class="zzz-wrap zzz-2"><text class="zzz" x="56" y="12">z</text></g>
+                  <g class="zzz-wrap zzz-3"><text class="zzz" x="62" y="6">z</text></g>
+                </g>
+              </svg>
+            </div>
+          </div>
+          <p id="phase-label" class="phase-label">Press Start to begin</p>
+          <p id="phase-timer" class="phase-timer">00:00</p>
+          <p id="phase-hint" class="phase-hint">Movement time for this set</p>
+        </div>
+
+        <div class="controls controls-main">
+          <button id="btn-cycle" class="btn btn-cycle btn-lg" type="button">
+            Start
+          </button>
+        </div>
+
+        <div class="live-log" id="live-log" aria-label="Sets and breaks so far">
+          <p class="live-log-title">This workout</p>
+          <ul id="live-log-list"></ul>
+        </div>
+
+        <!-- Finished / paused workouts reference -->
+        <div class="finished-workouts" id="finished-workouts" aria-label="Workouts in this session">
+          <p class="finished-workouts-title">Workouts this session</p>
+          <ul id="finished-workouts-list" class="finished-workouts-list"></ul>
+          <p id="finished-workouts-empty" class="finished-empty">Finished workouts will show here.</p>
+        </div>
+
+        <!-- Compact end controls — below log, away from Start -->
+        <div class="controls controls-end">
+          <button id="btn-finish-exercise" class="btn btn-finish-exercise btn-compact" type="button">
+            Finish
+          </button>
+          <button id="btn-finish-workout" class="btn btn-finish-workout btn-compact" type="button">
+            End
+          </button>
+        </div>
+      </section>
+
+      <!-- Screen: Summary -->
+      <section id="screen-summary" class="screen hidden">
+        <header class="header">
+          <p class="eyebrow">Session complete</p>
+          <h1>Workout Summary</h1>
+          <p id="summary-date-label" class="summary-date-label"></p>
+        </header>
+
+        <div class="summary-meta" id="summary-meta"></div>
+        <div class="summary-body" id="summary-body"></div>
+
+        <button id="btn-new-session" class="btn btn-start btn-lg" type="button">
+          New Session
+        </button>
+      </section>
+    </div>
   </div>
 
   <script src="app.js"></script>

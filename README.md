@@ -15,8 +15,8 @@ No install or build step required.
 3. **Workout N · Start** — Begins **Set 1** (movement timer, `MM:SS`).
 4. Press the main button again → **Break** timer.
 5. Press again → **Set 2**, then break, and so on.
-6. **Finish** — Ends the current exercise and advances to **Workout N+1 · Start**.
-7. **Finish Workout** — Ends the session and shows a summary:
+6. **Finish Workout N** — Ends the current exercise and advances to **Workout N+1 · Start**.
+7. **Finish Session** — Ends the session and shows a summary:
    - Total time, workout count, set/break counts
    - Per-workout breakdown of every set and break duration
 
