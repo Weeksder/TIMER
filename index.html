@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Workout Counter — v6</title>
+  <title>Workout Counter — v10</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -362,7 +362,7 @@
           <span class="legend-item legend-set"><i></i> Set</span>
           <span class="legend-item legend-break"><i></i> Break</span>
           <span class="legend-item legend-workout"><i></i> Workout</span>
-          <span class="legend-item legend-finish"><i></i> End</span>
+          <span class="legend-item legend-finish"><i></i> End Session</span>
         </div>
 
         <button id="btn-start-workout" class="btn btn-start btn-lg" type="button">
@@ -423,25 +423,28 @@
           </button>
         </div>
 
+        <!-- Session movements — collapsible under Start/Finish -->
+        <div class="session-workouts-dropdown" id="finished-workouts" aria-label="Session movements">
+          <button type="button" id="btn-session-workouts-toggle" class="session-workouts-toggle" aria-expanded="false" aria-controls="session-workouts-panel">
+            <span class="session-workouts-toggle-label" id="session-workouts-toggle-label"></span>
+            <svg class="session-workouts-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+          <div id="session-workouts-panel" class="session-workouts-panel hidden">
+            <div id="session-pause-note" class="session-pause-note hidden" role="status">
+              Session paused · timers frozen
+            </div>
+            <ul id="finished-workouts-list" class="finished-workouts-list"></ul>
+          </div>
+        </div>
+
         <div class="live-log hidden" id="live-log" aria-label="Sets and breaks so far">
           <ul id="live-log-list"></ul>
         </div>
 
-        <!-- Finished / paused workouts reference -->
-        <div class="finished-workouts" id="finished-workouts" aria-label="Workouts in this session">
-          <p class="finished-workouts-title">Workouts this session</p>
-          <div id="session-pause-note" class="session-pause-note hidden" role="status">
-            Session paused · timers frozen
-          </div>
-          <ul id="finished-workouts-list" class="finished-workouts-list"></ul>
-          <p id="finished-workouts-empty" class="finished-empty">Finished workouts will show here.</p>
-        </div>
-
-        <!-- Compact end controls — below log, away from Start -->
         <div class="controls controls-end">
-          <button id="btn-finish-workout" class="btn btn-finish-workout btn-compact" type="button">
-            End
-          </button>
+          <button id="btn-finish-workout" class="btn btn-finish-workout btn-compact" type="button">End Session</button>
         </div>
       </section>
 
