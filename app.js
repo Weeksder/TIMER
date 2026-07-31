@@ -5,6 +5,8 @@
 const STORAGE_KEY = "workout-counter-sessions";
 const TZ_STORAGE_KEY = "workout-counter-timezone";
 const SHOW_NOTES_KEY = "workout-counter-show-session-notes";
+const SHOW_START_TIME_KEY = "workout-counter-show-start-time";
+const MOVEMENT_NAMES_KEY = "workout-counter-movement-names";
 const EXPORT_FORMAT = "workout-counter-backup";
 const EXPORT_VERSION = 1;
 
@@ -41,34 +43,50 @@ const TIMEZONES = [
 const els = {
   mainTimer: document.getElementById("main-timer"),
   mainTimerValue: document.getElementById("main-timer-value"),
+  sessionStartBlock: document.getElementById("session-start-block"),
+  sessionStartValue: document.getElementById("session-start-value"),
+  countdownOverlay: document.getElementById("countdown-overlay"),
+  countdownNumber: document.getElementById("countdown-number"),
+  countdownSub: document.getElementById("countdown-sub"),
+  pauseOverlay: document.getElementById("pause-overlay"),
+  btnResumeOverlay: document.getElementById("btn-resume-overlay"),
   screenStart: document.getElementById("screen-start"),
   screenActive: document.getElementById("screen-active"),
   screenSummary: document.getElementById("screen-summary"),
   dateLabel: document.getElementById("date-label"),
   currentDate: document.getElementById("current-date"),
   currentTime: document.getElementById("current-time"),
-  timezoneNote: document.getElementById("timezone-note"),
+  btnGlobeTz: document.getElementById("btn-globe-tz"),
   btnStartWorkout: document.getElementById("btn-start-workout"),
   sessionTitle: document.getElementById("session-title"),
   sessionMovement: document.getElementById("session-movement"),
   phaseCard: document.getElementById("phase-card"),
   phaseLabel: document.getElementById("phase-label"),
   phaseTimer: document.getElementById("phase-timer"),
-  phaseHint: document.getElementById("phase-hint"),
   btnCycle: document.getElementById("btn-cycle"),
+  liveLog: document.getElementById("live-log"),
+  btnPauseSession: document.getElementById("btn-pause-session"),
   btnFinishExercise: document.getElementById("btn-finish-exercise"),
   btnFinishWorkout: document.getElementById("btn-finish-workout"),
   btnEditCurrent: document.getElementById("btn-edit-current"),
   liveLogList: document.getElementById("live-log-list"),
   finishedList: document.getElementById("finished-workouts-list"),
   finishedEmpty: document.getElementById("finished-workouts-empty"),
+  sessionPauseNote: document.getElementById("session-pause-note"),
   summaryMeta: document.getElementById("summary-meta"),
   summaryBody: document.getElementById("summary-body"),
   summaryDateLabel: document.getElementById("summary-date-label"),
+  btnResumeSession: document.getElementById("btn-resume-session"),
   btnNewSession: document.getElementById("btn-new-session"),
   historyList: document.getElementById("history-list"),
   historyEmpty: document.getElementById("history-empty"),
-  btnClearHistory: document.getElementById("btn-clear-history"),
+  btnDeleteMode: document.getElementById("btn-delete-mode"),
+  btnSelectAll: document.getElementById("btn-select-all"),
+  btnDeleteSelected: document.getElementById("btn-delete-selected"),
+  btnCancelSelect: document.getElementById("btn-cancel-select"),
+  historyFooterDefault: document.getElementById("history-footer-default"),
+  historyFooterSelect: document.getElementById("history-footer-select"),
+  historySub: document.querySelector(".sessions-drawer .history-sub"),
   btnSessionsTab: document.getElementById("btn-sessions-tab"),
   sessionsDrawer: document.getElementById("sessions-drawer"),
   sessionsBackdrop: document.getElementById("sessions-backdrop"),
@@ -81,6 +99,7 @@ const els = {
   settingsTzOffset: document.getElementById("settings-tz-offset"),
   settingsClientInfo: document.getElementById("settings-client-info"),
   toggleSessionNotes: document.getElementById("toggle-session-notes"),
+  toggleStartTime: document.getElementById("toggle-start-time"),
   btnExportSessions: document.getElementById("btn-export-sessions"),
   btnImportSessions: document.getElementById("btn-import-sessions"),
   btnExportSessionsSide: document.getElementById("btn-export-sessions-side"),
@@ -102,8 +121,10 @@ const els = {
   tzConfirm: document.getElementById("tz-confirm"),
   nameWorkoutModal: document.getElementById("name-workout-modal"),
   nameWorkoutTitle: document.getElementById("name-workout-title"),
-  nameWorkoutHint: document.getElementById("name-workout-hint"),
+  nameWorkoutHelp: document.getElementById("name-workout-help"),
+  btnNameHelp: document.getElementById("btn-name-help"),
   inputWorkoutName: document.getElementById("input-workout-name"),
+  nameSuggestList: document.getElementById("name-suggest-list"),
   btnNameConfirm: document.getElementById("btn-name-confirm"),
   editWorkoutModal: document.getElementById("edit-workout-modal"),
   editWorkoutTitle: document.getElementById("edit-workout-title"),
@@ -123,6 +144,17 @@ function loadShowSessionNotes() {
   }
 }
 
+function loadShowStartTime() {
+  try {
+    // Default on
+    const v = localStorage.getItem(SHOW_START_TIME_KEY);
+    if (v === null) return true;
+    return v === "1";
+  } catch {
+    return true;
+  }
+}
+
 function loadSavedTimezone() {
   try {
     const saved = localStorage.getItem(TZ_STORAGE_KEY);
@@ -135,24 +167,35 @@ function loadSavedTimezone() {
 
 /**
  * workouts[] items:
- * { id, number, name, segments, status: 'active'|'paused'|'finished', setNumber, phase }
+ * { id, number, name, segments, status, setNumber, phase, resumePartial }
+ * resumePartial: { phase: 'work'|'break', setNumber, baseMs } | null
  */
 const state = {
   timezone: loadSavedTimezone(),
   showSessionNotes: loadShowSessionNotes(),
+  showStartTime: loadShowStartTime(),
   pickerIndex: 0,
-  workoutStartedAt: null,
+  workoutStartedAt: null, // wall-clock Date.now() when session began (for Start display)
   mainElapsedMs: 0,
   mainTimerId: null,
+  mainRunningSince: null, // Date.now() when main interval started (for pause/resume)
+  sessionPaused: false,
   phase: "idle",
   phaseStartedAt: null,
   phaseElapsedMs: 0,
   phaseTimerId: null,
+  phaseBaseMs: 0, // accumulated when resuming/merging a set
+  mergeIntoLastSegment: false, // when finishing work, add to last set segment
   workouts: [],
   activeWorkoutId: null,
   setNumber: 1,
   nameModalMode: null, // 'start' | 'next'
   editingWorkoutId: null,
+  expandedWorkoutIds: new Set(),
+  sessionSelectMode: false,
+  selectedSessionIds: new Set(),
+  countdownTimerId: null,
+  canResumeSession: false,
 };
 
 function getTimezone() {
@@ -343,19 +386,75 @@ function formatUtcOffsetClean(timeZone) {
   return `UTC${sign}${hours}${mins}`;
 }
 
-function formatSessionDateLabel(date = new Date()) {
-  const tz = getTimezone();
-  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(date);
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
+function getZonedParts(date, options) {
+  return Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: getTimezone(), ...options })
       .formatToParts(date)
       .map((p) => [p.type, p.value])
   );
+}
+
+/** e.g. 5:47pm */
+function formatTimeAmpm(ts) {
+  if (!ts) return "—";
+  const p = getZonedParts(new Date(ts), {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const hour = String(parseInt(p.hour, 10));
+  const period = (p.dayPeriod || "").toLowerCase().replace(/\s/g, "");
+  return `${hour}:${p.minute}${period}`;
+}
+
+/** Calendar day key in selected timezone: YYYY-MM-DD */
+function dayKeyInZone(ts) {
+  const p = getZonedParts(new Date(ts), {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+function getSessionYear(ts) {
+  return getZonedParts(new Date(ts), { year: "numeric" }).year;
+}
+
+/** Today / Yesterday / Fri, Jul 30 (no year) */
+function formatSessionDayTitle(ts) {
+  if (!ts) return "Session";
+  const key = dayKeyInZone(ts);
+  const now = Date.now();
+  if (key === dayKeyInZone(now)) return "Today";
+  if (key === dayKeyInZone(now - 24 * 60 * 60 * 1000)) return "Yesterday";
+  const p = getZonedParts(new Date(ts), {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return `${p.weekday}, ${p.month} ${p.day}`;
+}
+
+function getSessionStartedAt(session) {
+  if (session?.startedAt) return session.startedAt;
+  if (session?.finishedAt && session.totalMs) {
+    return session.finishedAt - session.totalMs;
+  }
+  return session?.finishedAt || null;
+}
+
+/** Legacy full label kept for export / older data */
+function formatSessionDateLabel(date = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: getTimezone(),
+    weekday: "long",
+  }).format(date);
+  const parts = getZonedParts(date, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
   return `${weekday} ${parts.month}/${parts.day}/${parts.year}`;
 }
 
@@ -367,12 +466,10 @@ function lonToPercent(lon) {
 }
 
 function updateClock() {
-  const meta = getTzMeta();
   const p = nowInZoneParts();
-  if (els.dateLabel) els.dateLabel.textContent = `Today · ${meta.region}`;
+  if (els.dateLabel) els.dateLabel.textContent = "Today";
   els.currentDate.textContent = `${p.weekday}, ${p.month} ${p.day}, ${p.year}`;
   els.currentTime.textContent = `${p.hour}:${p.minute}:${p.second} ${p.dayPeriod}`;
-  if (els.timezoneNote) els.timezoneNote.textContent = `Timezone: ${meta.id}`;
   if (!els.settingsModal.classList.contains("hidden")) refreshSettingsTzDisplay();
   if (!els.tzPickerModal.classList.contains("hidden")) refreshPickerPreview();
 }
@@ -424,6 +521,7 @@ function closeSessionsDrawer() {
   els.sessionsBackdrop.classList.add("hidden");
   els.btnSessionsTab.classList.remove("is-open");
   els.btnSessionsTab.setAttribute("aria-expanded", "false");
+  if (state.sessionSelectMode) exitSessionSelectMode();
 }
 
 function toggleSessionsDrawer() {
@@ -469,6 +567,7 @@ function openSettings() {
   refreshSettingsTzDisplay();
   refreshSettingsClientInfo();
   if (els.toggleSessionNotes) els.toggleSessionNotes.checked = state.showSessionNotes;
+  if (els.toggleStartTime) els.toggleStartTime.checked = state.showStartTime;
   setBackupStatus("");
   // Reset accordion — none open by default
   document.querySelectorAll(".accordion-item.is-open").forEach((el) => {
@@ -535,8 +634,10 @@ function confirmTimezone() {
   }
   updateClock();
   refreshSettingsTzDisplay();
+  updateSessionStartDisplay();
   closeTzPicker();
-  if (els.settingsModal.classList.contains("hidden")) openSettings();
+  // Only reopen settings if user opened the picker from settings (settings still open under)
+  // Do not force-open settings when using the globe shortcut.
 }
 
 // ── Session notes toggle ─────────────────────────────────────────
@@ -552,6 +653,36 @@ function setShowSessionNotes(on) {
   if (!els.screenSummary.classList.contains("hidden")) {
     const sessions = loadSessions().sort((a, b) => b.finishedAt - a.finishedAt);
     if (sessions[0]) fillSummaryContainers(els.summaryMeta, els.summaryBody, sessions[0]);
+  }
+}
+
+function setShowStartTime(on) {
+  state.showStartTime = Boolean(on);
+  try {
+    localStorage.setItem(SHOW_START_TIME_KEY, state.showStartTime ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  if (els.toggleStartTime) els.toggleStartTime.checked = state.showStartTime;
+  updateSessionStartDisplay();
+}
+
+function formatSessionStartClock(ts) {
+  if (!ts) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: getTimezone(),
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(ts));
+}
+
+function updateSessionStartDisplay() {
+  if (!els.sessionStartBlock) return;
+  const show = state.showStartTime && state.workoutStartedAt && !els.mainTimer.classList.contains("hidden");
+  els.sessionStartBlock.classList.toggle("hidden", !show);
+  if (els.sessionStartValue) {
+    els.sessionStartValue.textContent = formatSessionStartClock(state.workoutStartedAt);
   }
 }
 
@@ -599,14 +730,15 @@ function buildSessionRecord() {
     }))
     .filter((w) => w.segments.length > 0);
 
-  // Also include active workout segments if any
   const stats = computeSessionStats(workouts, state.mainElapsedMs);
   const finishedAt = Date.now();
+  const startedAt = state.workoutStartedAt || finishedAt - (stats.totalMs || 0);
   const client = detectClientEnvironment();
   const tzMeta = getTzMeta();
   return {
     id: `session-${finishedAt}-${Math.random().toString(36).slice(2, 8)}`,
     dateLabel: formatSessionDateLabel(new Date(finishedAt)),
+    startedAt,
     finishedAt,
     totalMs: stats.totalMs,
     workoutCount: stats.workoutCount,
@@ -693,59 +825,192 @@ function fillSummaryContainers(metaEl, bodyEl, session) {
   bodyEl.innerHTML = body;
 }
 
+function updateSelectModeUI() {
+  const on = state.sessionSelectMode;
+  els.sessionsDrawer?.classList.toggle("is-select-mode", on);
+  els.historyFooterDefault?.classList.toggle("hidden", on);
+  els.historyFooterSelect?.classList.toggle("hidden", !on);
+  if (els.historySub) {
+    els.historySub.textContent = on
+      ? "Select sessions to delete · tap a tick box"
+      : "Previous sessions · tap a date to expand";
+  }
+  if (els.btnSelectAll) {
+    const total = loadSessions().length;
+    const n = state.selectedSessionIds.size;
+    els.btnSelectAll.textContent = total > 0 && n === total ? "Deselect all" : "Select all";
+  }
+  if (els.btnDeleteSelected) {
+    const n = state.selectedSessionIds.size;
+    els.btnDeleteSelected.textContent = n ? `Delete (${n})` : "Delete";
+    els.btnDeleteSelected.disabled = n === 0;
+  }
+}
+
+function enterSessionSelectMode() {
+  if (!loadSessions().length) return;
+  state.sessionSelectMode = true;
+  state.selectedSessionIds = new Set();
+  updateSelectModeUI();
+  renderHistory();
+}
+
+function exitSessionSelectMode() {
+  state.sessionSelectMode = false;
+  state.selectedSessionIds = new Set();
+  updateSelectModeUI();
+  renderHistory();
+}
+
+function toggleSessionSelected(id) {
+  if (state.selectedSessionIds.has(id)) state.selectedSessionIds.delete(id);
+  else state.selectedSessionIds.add(id);
+  // Update DOM without full re-render when possible
+  const item = els.historyList?.querySelector(`.history-item[data-id="${CSS.escape(id)}"]`);
+  if (item) item.classList.toggle("is-selected", state.selectedSessionIds.has(id));
+  updateSelectModeUI();
+}
+
+function selectAllSessions() {
+  const sessions = loadSessions();
+  if (!sessions.length) return;
+  if (state.selectedSessionIds.size === sessions.length) {
+    state.selectedSessionIds = new Set();
+  } else {
+    state.selectedSessionIds = new Set(sessions.map((s) => s.id));
+  }
+  renderHistory();
+  updateSelectModeUI();
+}
+
+function deleteSelectedSessions() {
+  const n = state.selectedSessionIds.size;
+  if (!n) return;
+  if (!window.confirm(`Delete ${n} selected session${n === 1 ? "" : "s"}? This cannot be undone.`)) {
+    return;
+  }
+  const remaining = loadSessions().filter((s) => !state.selectedSessionIds.has(s.id));
+  saveSessions(remaining);
+  exitSessionSelectMode();
+}
+
 function renderHistory(openId = null) {
   const sessions = loadSessions();
   const list = els.historyList;
-  list.querySelectorAll(".history-item").forEach((el) => el.remove());
+  list.querySelectorAll(".history-item, .history-year-header").forEach((el) => el.remove());
   if (sessions.length === 0) {
     els.historyEmpty.classList.remove("hidden");
+    if (state.sessionSelectMode) exitSessionSelectMode();
+    else updateSelectModeUI();
     return;
   }
   els.historyEmpty.classList.add("hidden");
   const ordered = [...sessions].sort((a, b) => b.finishedAt - a.finishedAt);
+
+  // Group by year (newest year first) — year label sits above its sessions
+  const byYear = new Map();
   for (const session of ordered) {
-    const item = document.createElement("div");
-    item.className = "history-item";
-    item.dataset.id = session.id;
-    if (openId && session.id === openId) item.classList.add("is-open");
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "history-item-toggle";
-    toggle.setAttribute("aria-expanded", item.classList.contains("is-open") ? "true" : "false");
-    const browserChip =
-      state.showSessionNotes && session.meta?.client
-        ? escapeHtml(formatClientSummary(session.meta.client))
-        : "";
-    toggle.innerHTML = `
-      <span class="date-text-wrap">
-        <span class="date-text">${escapeHtml(session.dateLabel)}</span>
-        ${browserChip ? `<span class="browser-chip">${browserChip}</span>` : ""}
-      </span>
-      <svg class="chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-      </svg>`;
-    const body = document.createElement("div");
-    body.className = "history-item-body";
-    const meta = document.createElement("div");
-    meta.className = "summary-meta";
-    const detail = document.createElement("div");
-    detail.className = "summary-body";
-    fillSummaryContainers(meta, detail, session);
-    body.append(meta, detail);
-    toggle.addEventListener("click", () => {
-      const wasOpen = item.classList.contains("is-open");
-      list.querySelectorAll(".history-item.is-open").forEach((el) => {
-        el.classList.remove("is-open");
-        el.querySelector(".history-item-toggle")?.setAttribute("aria-expanded", "false");
-      });
-      if (!wasOpen) {
-        item.classList.add("is-open");
-        toggle.setAttribute("aria-expanded", "true");
-      }
-    });
-    item.append(toggle, body);
-    list.appendChild(item);
+    const year = getSessionYear(session.finishedAt || getSessionStartedAt(session));
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(session);
   }
+
+  for (const [year, yearSessions] of byYear) {
+    const yearHeader = document.createElement("div");
+    yearHeader.className = "history-year-header";
+    yearHeader.textContent = year;
+    yearHeader.setAttribute("role", "heading");
+    yearHeader.setAttribute("aria-level", "3");
+    list.appendChild(yearHeader);
+
+    for (const session of yearSessions) {
+      const startedAt = getSessionStartedAt(session);
+      const finishedAt = session.finishedAt || startedAt;
+      const dayTitle = formatSessionDayTitle(startedAt || finishedAt);
+      const startTime = formatTimeAmpm(startedAt);
+      const endTime = formatTimeAmpm(finishedAt);
+
+      const item = document.createElement("div");
+      item.className = "history-item";
+      item.dataset.id = session.id;
+      if (openId && session.id === openId && !state.sessionSelectMode) {
+        item.classList.add("is-open");
+      }
+      if (state.selectedSessionIds.has(session.id)) item.classList.add("is-selected");
+
+      const row = document.createElement("div");
+      row.className = "history-item-row";
+
+      const tick = document.createElement("button");
+      tick.type = "button";
+      tick.className = "history-select-tick";
+      tick.setAttribute("aria-label", `Select ${dayTitle} ${startTime}`);
+      tick.innerHTML = `
+        <span class="tick-box">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.42 0L3.296 9.52a1 1 0 011.42-1.42l3.04 3.04 6.54-6.54a1 1 0 011.42 0z" clip-rule="evenodd"/>
+          </svg>
+        </span>`;
+      tick.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleSessionSelected(session.id);
+      });
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "history-item-toggle";
+      toggle.setAttribute("aria-expanded", item.classList.contains("is-open") ? "true" : "false");
+      const browserChip =
+        state.showSessionNotes && session.meta?.client
+          ? escapeHtml(formatClientSummary(session.meta.client))
+          : "";
+      toggle.innerHTML = `
+        <span class="date-text-wrap">
+          <span class="date-text">${escapeHtml(dayTitle)}</span>
+          <span class="session-start-time">${escapeHtml(startTime)}</span>
+          ${browserChip ? `<span class="browser-chip">${browserChip}</span>` : ""}
+        </span>
+        <svg class="chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+        </svg>`;
+
+      const body = document.createElement("div");
+      body.className = "history-item-body";
+
+      // Time range appears only when expanded (CSS); not in a card/box
+      const range = document.createElement("p");
+      range.className = "session-time-range";
+      range.textContent = `${startTime} ~ ${endTime}`;
+
+      const meta = document.createElement("div");
+      meta.className = "summary-meta";
+      const detail = document.createElement("div");
+      detail.className = "summary-body";
+      fillSummaryContainers(meta, detail, session);
+      body.append(range, meta, detail);
+
+      toggle.addEventListener("click", () => {
+        if (state.sessionSelectMode) {
+          toggleSessionSelected(session.id);
+          return;
+        }
+        const wasOpen = item.classList.contains("is-open");
+        list.querySelectorAll(".history-item.is-open").forEach((el) => {
+          el.classList.remove("is-open");
+          el.querySelector(".history-item-toggle")?.setAttribute("aria-expanded", "false");
+        });
+        if (!wasOpen) {
+          item.classList.add("is-open");
+          toggle.setAttribute("aria-expanded", "true");
+        }
+      });
+
+      row.append(tick, toggle);
+      item.append(row, body);
+      list.appendChild(item);
+    }
+  }
+  updateSelectModeUI();
 }
 
 function addSessionToHistory(session) {
@@ -829,6 +1094,7 @@ function normalizeImportedSession(raw) {
   return {
     id: String(raw.id),
     dateLabel: raw.dateLabel || formatSessionDateLabel(new Date(raw.finishedAt)),
+    startedAt: raw.startedAt || null,
     finishedAt: raw.finishedAt,
     totalMs: Number(raw.totalMs) || 0,
     workoutCount: Number(raw.workoutCount) || 0,
@@ -928,57 +1194,243 @@ async function onImportFileChange(event) {
 }
 
 // ── Timers ───────────────────────────────────────────────────────
-function startMainTimer() {
-  state.workoutStartedAt = Date.now();
-  state.mainElapsedMs = 0;
+function startMainTimer({ reset = true } = {}) {
+  if (reset) {
+    state.workoutStartedAt = Date.now();
+    state.mainElapsedMs = 0;
+  }
+  state.sessionPaused = false;
+  state.mainRunningSince = Date.now();
   els.mainTimer.classList.remove("hidden");
-  els.mainTimerValue.textContent = "00:00";
+  els.mainTimerValue.textContent = formatMs(state.mainElapsedMs);
+  updateSessionStartDisplay();
   clearInterval(state.mainTimerId);
   state.mainTimerId = setInterval(() => {
-    state.mainElapsedMs = Date.now() - state.workoutStartedAt;
-    els.mainTimerValue.textContent = formatMs(state.mainElapsedMs);
+    if (state.sessionPaused) return;
+    const running = Date.now() - state.mainRunningSince;
+    els.mainTimerValue.textContent = formatMs(state.mainElapsedMs + running);
   }, 250);
 }
 
-function stopMainTimer() {
-  clearInterval(state.mainTimerId);
-  state.mainTimerId = null;
-  if (state.workoutStartedAt) state.mainElapsedMs = Date.now() - state.workoutStartedAt;
+function freezeMainElapsed() {
+  if (state.mainRunningSince && !state.sessionPaused) {
+    state.mainElapsedMs += Date.now() - state.mainRunningSince;
+  }
+  state.mainRunningSince = null;
   els.mainTimerValue.textContent = formatMs(state.mainElapsedMs);
 }
 
-function startPhaseTimer() {
+function stopMainTimer() {
+  freezeMainElapsed();
+  clearInterval(state.mainTimerId);
+  state.mainTimerId = null;
+  state.sessionPaused = false;
+}
+
+function startPhaseTimer({ baseMs = 0 } = {}) {
+  state.phaseBaseMs = baseMs;
   state.phaseStartedAt = Date.now();
-  state.phaseElapsedMs = 0;
-  els.phaseTimer.textContent = "00:00";
+  state.phaseElapsedMs = baseMs;
+  els.phaseTimer.textContent = formatMs(baseMs);
   clearInterval(state.phaseTimerId);
   state.phaseTimerId = setInterval(() => {
-    state.phaseElapsedMs = Date.now() - state.phaseStartedAt;
+    if (state.sessionPaused) return;
+    state.phaseElapsedMs = state.phaseBaseMs + (Date.now() - state.phaseStartedAt);
     els.phaseTimer.textContent = formatMs(state.phaseElapsedMs);
   }, 250);
 }
 
+function freezePhaseElapsed() {
+  if (state.phaseStartedAt && state.phase !== "idle" && !state.sessionPaused) {
+    state.phaseElapsedMs = state.phaseBaseMs + (Date.now() - state.phaseStartedAt);
+    state.phaseBaseMs = state.phaseElapsedMs;
+    state.phaseStartedAt = null;
+  }
+  els.phaseTimer.textContent = formatMs(state.phaseElapsedMs || state.phaseBaseMs || 0);
+  return state.phaseElapsedMs || state.phaseBaseMs || 0;
+}
+
 function stopPhaseTimer() {
+  const total = freezePhaseElapsed();
   clearInterval(state.phaseTimerId);
   state.phaseTimerId = null;
-  if (state.phaseStartedAt) state.phaseElapsedMs = Date.now() - state.phaseStartedAt;
-  els.phaseTimer.textContent = formatMs(state.phaseElapsedMs);
-  return state.phaseElapsedMs;
+  state.phaseStartedAt = null;
+  return total;
+}
+
+// ── Countdown (session start only) ───────────────────────────────
+function runSessionStartCountdown(onDone) {
+  clearInterval(state.countdownTimerId);
+  let n = 3;
+  if (els.countdownOverlay) {
+    els.countdownOverlay.classList.remove("hidden");
+    els.countdownOverlay.setAttribute("aria-hidden", "false");
+  }
+  document.body.classList.add("overlay-active");
+  const tick = () => {
+    if (els.countdownNumber) {
+      els.countdownNumber.textContent = String(n);
+      // re-trigger pop animation
+      els.countdownNumber.style.animation = "none";
+      // force reflow
+      void els.countdownNumber.offsetWidth;
+      els.countdownNumber.style.animation = "";
+    }
+    if (els.countdownSub) {
+      els.countdownSub.textContent = n > 1 ? "Starting session…" : "Go!";
+    }
+  };
+  tick();
+  state.countdownTimerId = setInterval(() => {
+    n -= 1;
+    if (n <= 0) {
+      clearInterval(state.countdownTimerId);
+      state.countdownTimerId = null;
+      if (els.countdownOverlay) {
+        els.countdownOverlay.classList.add("hidden");
+        els.countdownOverlay.setAttribute("aria-hidden", "true");
+      }
+      document.body.classList.remove("overlay-active");
+      onDone?.();
+      return;
+    }
+    tick();
+  }, 1000);
+}
+
+// ── Session pause / resume ───────────────────────────────────────
+function showPauseOverlay() {
+  if (!els.pauseOverlay) return;
+  els.pauseOverlay.classList.remove("hidden");
+  els.pauseOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("overlay-active");
+}
+
+function hidePauseOverlay() {
+  if (!els.pauseOverlay) return;
+  els.pauseOverlay.classList.add("hidden");
+  els.pauseOverlay.setAttribute("aria-hidden", "true");
+  // Don't clear overlay-active if countdown is showing
+  if (els.countdownOverlay?.classList.contains("hidden")) {
+    document.body.classList.remove("overlay-active");
+  }
+}
+
+function updatePauseButton() {
+  if (!els.btnPauseSession) return;
+  els.btnPauseSession.classList.toggle("is-paused", state.sessionPaused);
+  els.btnPauseSession.title = state.sessionPaused ? "Resume session" : "Pause session";
+  els.btnPauseSession.setAttribute(
+    "aria-label",
+    state.sessionPaused ? "Resume session" : "Pause session"
+  );
+  els.sessionPauseNote?.classList.toggle("hidden", !state.sessionPaused);
+  if (state.sessionPaused) showPauseOverlay();
+  else hidePauseOverlay();
+}
+
+function pauseSession() {
+  if (state.sessionPaused) return;
+  // Freeze main + phase without committing segments (keep partial for merge)
+  freezeMainElapsed();
+  if (state.phase !== "idle") {
+    freezePhaseElapsed();
+    const active = getActiveWorkout();
+    if (active) {
+      active.resumePartial = {
+        phase: state.phase,
+        setNumber: state.setNumber,
+        baseMs: state.phaseElapsedMs || state.phaseBaseMs || 0,
+      };
+      active.setNumber = state.setNumber;
+      active.phase = state.phase;
+    }
+    clearInterval(state.phaseTimerId);
+    state.phaseTimerId = null;
+    state.phaseStartedAt = null;
+  }
+  clearInterval(state.mainTimerId);
+  state.mainTimerId = null;
+  state.sessionPaused = true;
+  const active = getActiveWorkout();
+  if (active && active.status === "active") active.status = "paused";
+  updatePauseButton();
+  refreshActiveUI();
+}
+
+function resumeSession() {
+  if (!state.sessionPaused) return;
+  state.sessionPaused = false;
+  hidePauseOverlay();
+  const active = getActiveWorkout();
+  if (active && active.status === "paused") active.status = "active";
+  // Resume main
+  startMainTimer({ reset: false });
+  // Resume phase if we were mid set/break
+  if (active?.resumePartial) {
+    const p = active.resumePartial;
+    state.phase = p.phase;
+    state.setNumber = p.setNumber;
+    state.mergeIntoLastSegment = p.phase === "work";
+    startPhaseTimer({ baseMs: p.baseMs || 0 });
+  }
+  updatePauseButton();
+  refreshActiveUI();
+}
+
+function requestPauseSession() {
+  if (state.sessionPaused) {
+    resumeSession();
+    return;
+  }
+  const ok = window.confirm(
+    "Do you want to pause the session?\n\nTimers will freeze until you resume."
+  );
+  if (ok) pauseSession();
 }
 
 // ── Active workout sync ──────────────────────────────────────────
+function getLastSetNumber(workout) {
+  const sets = (workout.segments || []).filter((s) => s.type === "set");
+  if (!sets.length) return null;
+  return sets[sets.length - 1].number;
+}
+
 function commitPhaseIfRunning() {
   if (state.phase === "idle") return;
   const durationMs = stopPhaseTimer();
   const active = getActiveWorkout();
   if (!active) return;
   if (state.phase === "work") {
-    active.segments.push({ type: "set", number: state.setNumber, durationMs });
+    if (state.mergeIntoLastSegment) {
+      const last = [...(active.segments || [])].reverse().find((s) => s.type === "set");
+      if (last && last.number === state.setNumber) {
+        last.durationMs = (last.durationMs || 0) + durationMs;
+      } else {
+        active.segments.push({ type: "set", number: state.setNumber, durationMs });
+      }
+    } else {
+      active.segments.push({ type: "set", number: state.setNumber, durationMs });
+    }
   } else if (state.phase === "break") {
-    active.segments.push({ type: "break", number: state.setNumber, durationMs });
+    if (state.mergeIntoLastSegment) {
+      const last = [...(active.segments || [])]
+        .reverse()
+        .find((s) => s.type === "break" && s.number === state.setNumber);
+      if (last) last.durationMs = (last.durationMs || 0) + durationMs;
+      else active.segments.push({ type: "break", number: state.setNumber, durationMs });
+    } else {
+      active.segments.push({ type: "break", number: state.setNumber, durationMs });
+    }
   }
   state.phase = "idle";
   state.phaseElapsedMs = 0;
+  state.phaseBaseMs = 0;
+  state.mergeIntoLastSegment = false;
+  if (active) {
+    active.resumePartial = null;
+    active.phase = "idle";
+  }
   renderLiveLog();
 }
 
@@ -990,27 +1442,65 @@ function syncActiveFromState() {
   active.segments = active.segments || [];
 }
 
-function loadActiveIntoState(workout) {
+function loadActiveIntoState(workout, { resumeSet = false } = {}) {
   state.activeWorkoutId = workout.id;
-  state.phase = workout.phase || "idle";
-  state.setNumber = workout.setNumber || 1;
   state.phaseElapsedMs = 0;
+  state.phaseBaseMs = 0;
   state.phaseStartedAt = null;
+  state.mergeIntoLastSegment = false;
+  clearInterval(state.phaseTimerId);
+  state.phaseTimerId = null;
   els.phaseTimer.textContent = "00:00";
-  // Continuing always resumes from idle (sets already committed when paused)
-  if (state.phase !== "idle") {
+
+  if (resumeSet) {
+    // Prefer incomplete partial, else last completed set number
+    if (workout.resumePartial) {
+      state.phase = workout.resumePartial.phase;
+      state.setNumber = workout.resumePartial.setNumber;
+      state.mergeIntoLastSegment = workout.resumePartial.phase === "work";
+      startPhaseTimer({ baseMs: workout.resumePartial.baseMs || 0 });
+    } else {
+      const lastSet = getLastSetNumber(workout);
+      if (lastSet) {
+        state.setNumber = lastSet;
+        state.phase = "work";
+        state.mergeIntoLastSegment = true;
+        // Start fresh on the same set number — time merges into last set segment on finish
+        startPhaseTimer({ baseMs: 0 });
+      } else {
+        state.phase = "idle";
+        state.setNumber = 1;
+      }
+    }
+  } else {
     state.phase = "idle";
-    workout.phase = "idle";
+    const lastSet = getLastSetNumber(workout);
+    state.setNumber = lastSet ? lastSet + 1 : 1;
+    workout.resumePartial = null;
   }
+
+  workout.phase = state.phase;
+  workout.setNumber = state.setNumber;
   workout.status = "active";
 }
 
 function pauseActiveWorkout() {
   const active = getActiveWorkout();
   if (!active) return;
-  commitPhaseIfRunning();
+  // If mid-phase, stash partial without creating a finished segment
+  if (state.phase !== "idle") {
+    const elapsed = stopPhaseTimer();
+    active.resumePartial = {
+      phase: state.phase,
+      setNumber: state.setNumber,
+      baseMs: elapsed,
+    };
+    state.phase = "idle";
+    state.phaseBaseMs = 0;
+    state.phaseElapsedMs = 0;
+    state.mergeIntoLastSegment = false;
+  }
   syncActiveFromState();
-  // Keep finished as finished; otherwise mark paused
   if (active.status !== "finished") active.status = "paused";
   active.phase = "idle";
 }
@@ -1021,6 +1511,8 @@ function updateCycleButton() {
   const active = getActiveWorkout();
   const name = active?.name || "";
   btn.classList.remove("is-work-mode", "is-break-mode");
+  const blocked = state.sessionPaused || !active || active.status === "finished";
+  btn.disabled = blocked;
   if (state.phase === "idle") {
     btn.textContent = name ? `${name} · Start` : "Start";
   } else if (state.phase === "work") {
@@ -1035,22 +1527,16 @@ function updateCycleButton() {
 function updatePhaseCard() {
   const card = els.phaseCard;
   card.classList.remove("is-work", "is-break", "is-idle");
-  const active = getActiveWorkout();
   if (state.phase === "idle") {
     card.classList.add("is-idle");
     els.phaseLabel.textContent = "Ready";
     els.phaseTimer.textContent = "00:00";
-    els.phaseHint.textContent = active
-      ? `Press Start to begin ${active.name}`
-      : "Press Start to begin";
   } else if (state.phase === "work") {
     card.classList.add("is-work");
     els.phaseLabel.textContent = `Set ${state.setNumber}`;
-    els.phaseHint.textContent = "Movement time · press again for break";
   } else {
     card.classList.add("is-break");
     els.phaseLabel.textContent = "Break";
-    els.phaseHint.textContent = "Rest time · press again for next set";
   }
 }
 
@@ -1086,16 +1572,17 @@ function updateSessionTitle() {
 
 function renderLiveLog() {
   const list = els.liveLogList;
+  const wrap = els.liveLog;
+  if (!list) return;
   list.innerHTML = "";
   const active = getActiveWorkout();
   const segments = active?.segments || [];
+  // Hide until the first set/break is finished and recorded
   if (segments.length === 0) {
-    const p = document.createElement("p");
-    p.className = "empty";
-    p.textContent = "No sets or breaks recorded yet.";
-    list.appendChild(p);
+    wrap?.classList.add("hidden");
     return;
   }
+  wrap?.classList.remove("hidden");
   for (const seg of segments) {
     const li = document.createElement("li");
     li.className = seg.type === "set" ? "is-set" : "is-break";
@@ -1110,12 +1597,43 @@ function renderLiveLog() {
   }
 }
 
+function buildWorkoutStatsHTML(workout) {
+  const segments = workout.segments || [];
+  if (!segments.length) {
+    return `<p class="stat-empty">No sets or breaks recorded yet.</p>`;
+  }
+  let setTime = 0;
+  let breakTime = 0;
+  const rows = segments
+    .map((seg) => {
+      if (seg.type === "set") setTime += seg.durationMs;
+      else breakTime += seg.durationMs;
+      const label = seg.type === "set" ? `Set ${seg.number}` : `Break ${seg.number}`;
+      return `
+        <div class="stat-row ${seg.type === "set" ? "is-set" : "is-break"}">
+          <span>${label}</span>
+          <span class="time">${formatMs(seg.durationMs)}</span>
+        </div>`;
+    })
+    .join("");
+  return `
+    ${rows}
+    <div class="stat-totals">
+      <span>Work time: <strong style="color:var(--set)">${formatMs(setTime)}</strong></span>
+      <span>Break time: <strong style="color:var(--break)">${formatMs(breakTime)}</strong></span>
+    </div>`;
+}
+
 function renderFinishedWorkouts() {
   const list = els.finishedList;
   if (!list) return;
   list.innerHTML = "";
-  // Show all workouts as a session map (active included for reference)
   const ordered = [...state.workouts].sort((a, b) => a.number - b.number);
+  // Drop expanded ids that no longer exist
+  const ids = new Set(ordered.map((w) => w.id));
+  state.expandedWorkoutIds = new Set(
+    [...state.expandedWorkoutIds].filter((id) => ids.has(id))
+  );
   if (ordered.length === 0) return;
 
   for (const w of ordered) {
@@ -1123,27 +1641,57 @@ function renderFinishedWorkouts() {
     li.className = "fw-item";
     if (w.status === "paused") li.classList.add("is-paused");
     if (w.id === state.activeWorkoutId) li.classList.add("is-active-ref");
+    if (state.expandedWorkoutIds.has(w.id)) li.classList.add("is-expanded");
     li.dataset.workout = String(workoutColorIndex(w.number));
 
     const sets = (w.segments || []).filter((s) => s.type === "set").length;
-    const main = document.createElement("div");
-    main.className = "fw-main";
-    main.innerHTML = `
-      <span class="fw-name">${escapeHtml(w.name || `Workout ${w.number}`)}</span>
-      <span class="fw-meta">Workout ${w.number} · ${sets} set${sets === 1 ? "" : "s"} · ${w.status}</span>
+    const breaks = (w.segments || []).filter((s) => s.type === "break").length;
+
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "fw-item-head";
+    head.setAttribute("aria-expanded", state.expandedWorkoutIds.has(w.id) ? "true" : "false");
+    head.innerHTML = `
+      <div class="fw-main">
+        <span class="fw-name">${escapeHtml(w.name || `Workout ${w.number}`)}</span>
+        <span class="fw-meta">Workout ${w.number} · ${sets} set${sets === 1 ? "" : "s"} · ${breaks} break${breaks === 1 ? "" : "s"} · ${w.status}</span>
+      </div>
+      <span class="fw-badge ${w.status}">${w.status}</span>
+      <svg class="fw-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+      </svg>
     `;
+    head.addEventListener("click", () => {
+      if (state.expandedWorkoutIds.has(w.id)) state.expandedWorkoutIds.delete(w.id);
+      else state.expandedWorkoutIds.add(w.id);
+      renderFinishedWorkouts();
+    });
 
-    const badge = document.createElement("span");
-    badge.className = `fw-badge ${w.status}`;
-    badge.textContent = w.status;
-
+    const actions = document.createElement("div");
+    actions.className = "fw-item-actions";
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "btn-edit-mini";
     edit.textContent = "Edit";
-    edit.addEventListener("click", () => openEditWorkout(w.id));
+    edit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEditWorkout(w.id);
+    });
+    actions.appendChild(edit);
 
-    li.append(main, badge, edit);
+    // Put edit outside head so expand doesn't steal edit clicks
+    const top = document.createElement("div");
+    top.style.display = "flex";
+    top.style.alignItems = "stretch";
+    head.style.flex = "1";
+    head.style.minWidth = "0";
+    top.append(head, actions);
+
+    const stats = document.createElement("div");
+    stats.className = "fw-item-stats";
+    stats.innerHTML = buildWorkoutStatsHTML(w);
+
+    li.append(top, stats);
     list.appendChild(li);
   }
 }
@@ -1152,8 +1700,10 @@ function refreshActiveUI() {
   updateSessionTitle();
   updateCycleButton();
   updatePhaseCard();
+  updatePauseButton();
   renderLiveLog();
   renderFinishedWorkouts();
+  updateSessionStartDisplay();
 }
 
 function showScreen(name) {
@@ -1163,25 +1713,63 @@ function showScreen(name) {
 }
 
 // ── Name workout modal ───────────────────────────────────────────
+function resetNameHelp() {
+  if (els.nameWorkoutHelp) els.nameWorkoutHelp.classList.add("hidden");
+  if (els.btnNameHelp) els.btnNameHelp.setAttribute("aria-expanded", "false");
+}
+
+function toggleNameHelp() {
+  if (!els.nameWorkoutHelp || !els.btnNameHelp) return;
+  els.nameWorkoutHelp.classList.toggle("hidden");
+  const isOpen = !els.nameWorkoutHelp.classList.contains("hidden");
+  els.btnNameHelp.setAttribute("aria-expanded", isOpen ? "true" : "false");
+}
+
 function openNameModal(mode) {
+  // Prevent stacking / double-open of the same dialog
+  if (
+    els.nameWorkoutModal &&
+    !els.nameWorkoutModal.classList.contains("hidden") &&
+    state.nameModalMode === mode
+  ) {
+    return;
+  }
+  // Close other dialogs so only one modal is visible
+  if (els.settingsModal && !els.settingsModal.classList.contains("hidden")) {
+    closeSettings();
+  }
+  if (els.editWorkoutModal && !els.editWorkoutModal.classList.contains("hidden")) {
+    closeEditWorkout();
+  }
+  if (els.tzPickerModal && !els.tzPickerModal.classList.contains("hidden")) {
+    closeTzPicker();
+  }
+
   state.nameModalMode = mode;
   if (mode === "start") {
     els.nameWorkoutTitle.textContent = "Name this movement";
-    els.nameWorkoutHint.textContent = "What exercise is Workout 1?";
   } else {
     const n = nextWorkoutNumber();
     els.nameWorkoutTitle.textContent = `Name Workout ${n}`;
-    els.nameWorkoutHint.textContent = "What exercise is next?";
   }
   els.inputWorkoutName.value = "";
+  resetNameHelp();
+  hideNameSuggestions();
   openModal(els.nameWorkoutModal);
-  setTimeout(() => els.inputWorkoutName.focus(), 50);
+  setTimeout(() => {
+    if (els.nameWorkoutModal.classList.contains("hidden")) return;
+    els.inputWorkoutName.focus();
+    // Do not show suggestions until the user types
+    hideNameSuggestions();
+  }, 50);
 }
 
 function closeNameModal() {
   const mode = state.nameModalMode;
   closeModal(els.nameWorkoutModal);
   state.nameModalMode = null;
+  resetNameHelp();
+  hideNameSuggestions();
   // If user cancelled naming the first workout, stay on start screen
   if (mode === "start" && !state.workouts.length) {
     showScreen("start");
@@ -1190,17 +1778,186 @@ function closeNameModal() {
   refreshActiveUI();
 }
 
-function confirmNameWorkout() {
-  const name = els.inputWorkoutName.value.trim();
-  if (!name) {
-    els.inputWorkoutName.focus();
-    els.inputWorkoutName.placeholder = "Please enter a name";
+// ── Movement name history / suggestions ──────────────────────────
+function normalizeMovementName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function loadMovementNames() {
+  try {
+    const raw = localStorage.getItem(MOVEMENT_NAMES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // unique lowercase
+    const set = new Set();
+    const out = [];
+    for (const n of parsed) {
+      const norm = normalizeMovementName(n);
+      if (norm && !set.has(norm)) {
+        set.add(norm);
+        out.push(norm);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function saveMovementName(name) {
+  const norm = normalizeMovementName(name);
+  if (!norm) return norm;
+  const names = loadMovementNames().filter((n) => n !== norm);
+  names.unshift(norm); // most recent first
+  try {
+    localStorage.setItem(MOVEMENT_NAMES_KEY, JSON.stringify(names.slice(0, 200)));
+  } catch {
+    /* ignore */
+  }
+  return norm;
+}
+
+function removeMovementName(name) {
+  const norm = normalizeMovementName(name);
+  if (!norm) return false;
+  const names = loadMovementNames().filter((n) => n !== norm);
+  try {
+    localStorage.setItem(MOVEMENT_NAMES_KEY, JSON.stringify(names));
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+function filterMovementSuggestions(query) {
+  const q = normalizeMovementName(query);
+  // No query → no suggestions (don't show history until the user types)
+  if (!q) return [];
+  const names = loadMovementNames();
+  // Substring match anywhere (curls matches dumbbell curls, machine curls, etc.)
+  const scored = names
+    .map((n) => {
+      const idx = n.indexOf(q);
+      if (idx === -1) return null;
+      // Prefer starts-with, then earlier match, then shorter name
+      const score = (idx === 0 ? 0 : 100) + idx + n.length / 100;
+      return { n, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.score - b.score)
+    .map((x) => x.n);
+  return scored.slice(0, 10);
+}
+
+function hideNameSuggestions() {
+  if (!els.nameSuggestList) return;
+  els.nameSuggestList.classList.add("hidden");
+  els.nameSuggestList.innerHTML = "";
+}
+
+function renderNameSuggestions(query) {
+  if (!els.nameSuggestList) return;
+  const q = normalizeMovementName(query);
+  // Only show dropdown after the user has typed something
+  if (!q) {
+    hideNameSuggestions();
     return;
   }
+  const matches = filterMovementSuggestions(query);
+  els.nameSuggestList.innerHTML = "";
+  if (!matches.length) {
+    els.nameSuggestList.classList.remove("hidden");
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="suggest-empty">No matching movements</span>`;
+    els.nameSuggestList.appendChild(li);
+    return;
+  }
+  els.nameSuggestList.classList.remove("hidden");
+  for (const name of matches) {
+    const li = document.createElement("li");
+    li.className = "suggest-row";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "suggest-pick";
+    btn.setAttribute("role", "option");
+    btn.textContent = name;
+    btn.addEventListener("mousedown", (e) => {
+      // mousedown so it runs before input blur
+      e.preventDefault();
+      els.inputWorkoutName.value = name;
+      hideNameSuggestions();
+      els.inputWorkoutName.focus();
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "suggest-delete";
+    del.setAttribute("aria-label", `Remove saved name ${name}`);
+    del.title = "Remove this name";
+    del.textContent = "×";
+    del.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ok = window.confirm(
+        `Remove “${name}” from saved movement names?\n\nThis only deletes the suggestion, not past session history.`
+      );
+      if (!ok) {
+        els.inputWorkoutName.focus();
+        return;
+      }
+      removeMovementName(name);
+      // Refresh list with current query; clear input if it matched the deleted name
+      if (normalizeMovementName(els.inputWorkoutName.value) === name) {
+        // keep typed text; just refresh suggestions
+      }
+      renderNameSuggestions(els.inputWorkoutName.value);
+      els.inputWorkoutName.focus();
+    });
+
+    li.append(btn, del);
+    els.nameSuggestList.appendChild(li);
+  }
+}
+
+function onNameInput() {
+  // Force lowercase as user types (letters only case-folded; numbers/symbols kept)
+  const el = els.inputWorkoutName;
+  if (!el) return;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const lower = el.value.toLowerCase();
+  if (el.value !== lower) {
+    el.value = lower;
+    try {
+      el.setSelectionRange(start, end);
+    } catch {
+      /* ignore */
+    }
+  }
+  renderNameSuggestions(el.value);
+}
+
+function confirmNameWorkout() {
+  const name = normalizeMovementName(els.inputWorkoutName.value);
+  if (!name) {
+    els.inputWorkoutName.focus();
+    els.inputWorkoutName.placeholder = "please enter a name";
+    return;
+  }
+  els.inputWorkoutName.value = name;
+  saveMovementName(name);
+  hideNameSuggestions();
 
   if (state.nameModalMode === "start") {
     state.workouts = [];
     state.mainElapsedMs = 0;
+    state.sessionPaused = false;
+    state.mergeIntoLastSegment = false;
     const w = {
       id: uid(),
       number: 1,
@@ -1209,15 +1966,20 @@ function confirmNameWorkout() {
       status: "active",
       setNumber: 1,
       phase: "idle",
+      resumePartial: null,
     };
     state.workouts.push(w);
     state.activeWorkoutId = w.id;
     state.phase = "idle";
     state.setNumber = 1;
-    startMainTimer();
+    closeNameModal();
     showScreen("active");
     refreshActiveUI();
-    closeNameModal();
+    // 3-2-1 only at the beginning of a session
+    runSessionStartCountdown(() => {
+      startMainTimer({ reset: true });
+      refreshActiveUI();
+    });
     return;
   }
 
@@ -1230,11 +1992,13 @@ function confirmNameWorkout() {
       status: "active",
       setNumber: 1,
       phase: "idle",
+      resumePartial: null,
     };
     state.workouts.push(w);
     state.activeWorkoutId = w.id;
     state.phase = "idle";
     state.setNumber = 1;
+    state.mergeIntoLastSegment = false;
     refreshActiveUI();
     closeNameModal();
   }
@@ -1262,9 +2026,11 @@ function getEditingWorkout() {
 function onEditSaveName() {
   const w = getEditingWorkout();
   if (!w) return;
-  const name = els.inputEditName.value.trim();
+  const name = normalizeMovementName(els.inputEditName.value);
   if (!name) return;
   w.name = name;
+  els.inputEditName.value = name;
+  saveMovementName(name);
   refreshActiveUI();
   closeEditWorkout();
 }
@@ -1272,14 +2038,46 @@ function onEditSaveName() {
 function onEditContinue() {
   const target = getEditingWorkout();
   if (!target) return;
-  if (target.id === state.activeWorkoutId) {
-    closeEditWorkout();
-    return;
+
+  const lastSet =
+    target.resumePartial?.setNumber ||
+    getLastSetNumber(target) ||
+    target.setNumber ||
+    1;
+
+  const hasProgress =
+    (target.segments && target.segments.length > 0) || target.resumePartial;
+
+  let resumeSet = false;
+  if (hasProgress) {
+    resumeSet = window.confirm(
+      `Continue Set ${lastSet}?\n\nYes — resume Set ${lastSet} (time combines with that set)\nNo — leave it finished and start the next set later`
+    );
   }
-  pauseActiveWorkout();
-  loadActiveIntoState(target);
-  // If it was finished, continuing reopens it
+
+  if (target.id !== state.activeWorkoutId) {
+    // Switching away from current: pause current movement (not whole session)
+    if (!state.sessionPaused) pauseActiveWorkout();
+  }
+
+  loadActiveIntoState(target, { resumeSet });
   target.status = "active";
+  // If session is paused, keep timers frozen until user hits Resume
+  if (state.sessionPaused) {
+    clearInterval(state.phaseTimerId);
+    state.phaseTimerId = null;
+    state.phaseStartedAt = null;
+    if (resumeSet && state.phase !== "idle") {
+      target.resumePartial = {
+        phase: state.phase,
+        setNumber: state.setNumber,
+        baseMs: state.phaseBaseMs || state.phaseElapsedMs || 0,
+      };
+      // Display frozen partial time; real ticking resumes with session Resume
+      els.phaseTimer.textContent = formatMs(target.resumePartial.baseMs);
+      state.phase = "idle";
+    }
+  }
   refreshActiveUI();
   closeEditWorkout();
 }
@@ -1335,11 +2133,15 @@ function onEditRemove() {
 }
 
 // ── Session logic ────────────────────────────────────────────────
-function onStartWorkoutClick() {
+function onStartWorkoutClick(e) {
+  e?.preventDefault?.();
+  e?.stopPropagation?.();
+  // Only one naming dialog for a fresh session start
   openNameModal("start");
 }
 
 function onCyclePress() {
+  if (state.sessionPaused) return;
   const active = getActiveWorkout();
   if (!active || active.status === "finished") {
     if (!active) openNameModal("next");
@@ -1347,17 +2149,26 @@ function onCyclePress() {
   }
 
   if (state.phase === "idle") {
-    state.phase = "work";
-    // If no sets yet, start at 1; else continue from saved setNumber if restarting mid
-    if (!active.segments.length) state.setNumber = 1;
-    else {
-      const lastSet = [...active.segments].reverse().find((s) => s.type === "set");
-      // After a completed break, setNumber already points to next; if idle after finish set without break, keep
-      if (!state.setNumber || state.setNumber < 1) {
-        state.setNumber = lastSet ? lastSet.number + 1 : 1;
-      }
+    // Resume partial if stashed on this workout
+    if (active.resumePartial) {
+      const p = active.resumePartial;
+      state.phase = p.phase;
+      state.setNumber = p.setNumber;
+      state.mergeIntoLastSegment = p.phase === "work";
+      startPhaseTimer({ baseMs: p.baseMs || 0 });
+      syncActiveFromState();
+      updateCycleButton();
+      updatePhaseCard();
+      return;
     }
-    startPhaseTimer();
+    state.phase = "work";
+    state.mergeIntoLastSegment = false;
+    if (!active.segments.length) state.setNumber = 1;
+    else if (!state.setNumber || state.setNumber < 1) {
+      const lastSet = getLastSetNumber(active);
+      state.setNumber = lastSet ? lastSet + 1 : 1;
+    }
+    startPhaseTimer({ baseMs: 0 });
     syncActiveFromState();
     updateCycleButton();
     updatePhaseCard();
@@ -1365,12 +2176,25 @@ function onCyclePress() {
   }
 
   if (state.phase === "work") {
+    // commit work (merge if resuming same set)
     const durationMs = stopPhaseTimer();
-    active.segments.push({ type: "set", number: state.setNumber, durationMs });
+    if (state.mergeIntoLastSegment) {
+      const last = [...(active.segments || [])].reverse().find((s) => s.type === "set");
+      if (last && last.number === state.setNumber) {
+        last.durationMs = (last.durationMs || 0) + durationMs;
+      } else {
+        active.segments.push({ type: "set", number: state.setNumber, durationMs });
+      }
+    } else {
+      active.segments.push({ type: "set", number: state.setNumber, durationMs });
+    }
+    state.mergeIntoLastSegment = false;
+    active.resumePartial = null;
+    state.phaseBaseMs = 0;
     renderLiveLog();
     renderFinishedWorkouts();
     state.phase = "break";
-    startPhaseTimer();
+    startPhaseTimer({ baseMs: 0 });
     syncActiveFromState();
     updateCycleButton();
     updatePhaseCard();
@@ -1380,11 +2204,14 @@ function onCyclePress() {
   if (state.phase === "break") {
     const durationMs = stopPhaseTimer();
     active.segments.push({ type: "break", number: state.setNumber, durationMs });
+    active.resumePartial = null;
+    state.phaseBaseMs = 0;
+    state.mergeIntoLastSegment = false;
     renderLiveLog();
     renderFinishedWorkouts();
     state.setNumber += 1;
     state.phase = "work";
-    startPhaseTimer();
+    startPhaseTimer({ baseMs: 0 });
     syncActiveFromState();
     updateCycleButton();
     updatePhaseCard();
@@ -1392,16 +2219,23 @@ function onCyclePress() {
 }
 
 function onFinishExercise() {
+  if (state.sessionPaused) {
+    window.alert("Resume the session before finishing a movement.");
+    return;
+  }
   const active = getActiveWorkout();
   if (!active) return;
   commitPhaseIfRunning();
   active.status = "finished";
   active.phase = "idle";
   active.setNumber = state.setNumber;
+  active.resumePartial = null;
   // Detach until next movement is named (prevents adding sets to a finished workout)
   state.activeWorkoutId = null;
   state.phase = "idle";
   state.setNumber = 1;
+  state.mergeIntoLastSegment = false;
+  state.phaseBaseMs = 0;
   refreshActiveUI();
   openNameModal("next");
 }
@@ -1421,16 +2255,9 @@ function onFinishSession() {
   stopMainTimer();
   const session = buildSessionRecord();
   if (session.workouts.length === 0 && state.workouts.every((w) => !w.segments?.length)) {
-    // empty session — still allow end without saving empty?
     if (!window.confirm("No sets were recorded. End session anyway?")) {
-      // resume main timer
       if (!state.mainTimerId && state.workoutStartedAt) {
-        const already = state.mainElapsedMs;
-        state.workoutStartedAt = Date.now() - already;
-        state.mainTimerId = setInterval(() => {
-          state.mainElapsedMs = Date.now() - state.workoutStartedAt;
-          els.mainTimerValue.textContent = formatMs(state.mainElapsedMs);
-        }, 250);
+        startMainTimer({ reset: false });
       }
       return;
     }
@@ -1438,146 +2265,234 @@ function onFinishSession() {
 
   if (session.workouts.length > 0) addSessionToHistory(session);
 
-  els.summaryDateLabel.textContent = session.dateLabel || formatSessionDateLabel();
+  const startLabel = formatTimeAmpm(session.startedAt);
+  const endLabel = formatTimeAmpm(session.finishedAt);
+  const dayTitle = formatSessionDayTitle(session.startedAt || session.finishedAt);
+  els.summaryDateLabel.textContent = `${dayTitle} · ${startLabel} ~ ${endLabel}`;
   fillSummaryContainers(els.summaryMeta, els.summaryBody, session);
+  state.canResumeSession = true;
+  if (els.btnResumeSession) els.btnResumeSession.classList.remove("hidden");
   showScreen("summary");
   els.mainTimer.classList.add("hidden");
+  updateSessionStartDisplay();
+}
+
+function resumeFromSummary() {
+  if (!state.canResumeSession) return;
+  // Bring user back into the same in-memory session
+  showScreen("active");
+  els.mainTimer.classList.remove("hidden");
+  state.sessionPaused = false;
+  state.canResumeSession = false;
+  // Keep workouts / elapsed; restart the total timer from frozen elapsed
+  if (!state.workoutStartedAt) state.workoutStartedAt = Date.now() - (state.mainElapsedMs || 0);
+  startMainTimer({ reset: false });
+  // Prefer last unfinished or last paused workout as active
+  if (!getActiveWorkout() && state.workouts.length) {
+    const pick =
+      state.workouts.find((w) => w.status === "paused") ||
+      state.workouts.find((w) => w.status === "active") ||
+      [...state.workouts].reverse().find((w) => w.status === "finished");
+    if (pick) {
+      pick.status = "active";
+      state.activeWorkoutId = pick.id;
+      state.phase = "idle";
+      state.setNumber = getLastSetNumber(pick) ? getLastSetNumber(pick) + 1 : 1;
+    }
+  }
+  refreshActiveUI();
+  updateSessionStartDisplay();
 }
 
 function resetSession() {
   clearInterval(state.mainTimerId);
   clearInterval(state.phaseTimerId);
+  clearInterval(state.countdownTimerId);
   state.mainTimerId = null;
   state.phaseTimerId = null;
+  state.countdownTimerId = null;
   state.workoutStartedAt = null;
+  state.mainRunningSince = null;
   state.phaseStartedAt = null;
   state.mainElapsedMs = 0;
   state.phaseElapsedMs = 0;
+  state.phaseBaseMs = 0;
+  state.mergeIntoLastSegment = false;
+  state.sessionPaused = false;
+  state.canResumeSession = false;
   state.phase = "idle";
   state.setNumber = 1;
   state.workouts = [];
   state.activeWorkoutId = null;
   els.mainTimer.classList.add("hidden");
   els.mainTimerValue.textContent = "00:00";
+  els.countdownOverlay?.classList.add("hidden");
+  els.pauseOverlay?.classList.add("hidden");
+  document.body.classList.remove("overlay-active");
   els.btnCycle.classList.remove("is-work-mode", "is-break-mode");
   els.sessionTitle.removeAttribute("data-workout");
+  updateSessionStartDisplay();
+  updatePauseButton();
   showScreen("start");
   updateClock();
 }
 
-function onClearHistory() {
-  if (!loadSessions().length) return;
-  if (!window.confirm("Clear all saved session history?")) return;
-  saveSessions([]);
-  renderHistory();
+// ── Events (bind once — avoids duplicate listeners if script re-evaluates) ──
+function bindAppEvents() {
+  if (window.__workoutCounterEventsBound) return;
+  window.__workoutCounterEventsBound = true;
+
+  els.btnStartWorkout?.addEventListener("click", onStartWorkoutClick);
+  els.btnCycle?.addEventListener("click", onCyclePress);
+  els.btnPauseSession?.addEventListener("click", requestPauseSession);
+  els.btnResumeOverlay?.addEventListener("click", resumeSession);
+  els.btnFinishExercise?.addEventListener("click", onFinishExercise);
+  els.btnFinishWorkout?.addEventListener("click", onFinishSession);
+  els.btnResumeSession?.addEventListener("click", resumeFromSummary);
+  els.btnNewSession?.addEventListener("click", resetSession);
+  els.btnDeleteMode?.addEventListener("click", enterSessionSelectMode);
+  els.btnSelectAll?.addEventListener("click", selectAllSessions);
+  els.btnDeleteSelected?.addEventListener("click", deleteSelectedSessions);
+  els.btnCancelSelect?.addEventListener("click", exitSessionSelectMode);
+  els.btnEditCurrent?.addEventListener("click", () => {
+    if (state.activeWorkoutId) openEditWorkout(state.activeWorkoutId);
+  });
+
+  els.btnNameConfirm?.addEventListener("click", confirmNameWorkout);
+  els.btnNameHelp?.addEventListener("click", toggleNameHelp);
+  els.inputWorkoutName?.addEventListener("input", onNameInput);
+  els.inputWorkoutName?.addEventListener("focus", () => {
+    // Only show matches if there is already text in the field
+    if (normalizeMovementName(els.inputWorkoutName.value)) {
+      renderNameSuggestions(els.inputWorkoutName.value);
+    } else {
+      hideNameSuggestions();
+    }
+  });
+  els.inputWorkoutName?.addEventListener("blur", () => {
+    setTimeout(() => hideNameSuggestions(), 150);
+  });
+  els.inputWorkoutName?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      hideNameSuggestions();
+      confirmNameWorkout();
+    } else if (e.key === "Escape") {
+      hideNameSuggestions();
+    }
+  });
+
+  els.btnEditSaveName?.addEventListener("click", onEditSaveName);
+  els.btnEditContinue?.addEventListener("click", onEditContinue);
+  els.btnEditRestart?.addEventListener("click", onEditRestart);
+  els.btnEditRemove?.addEventListener("click", onEditRemove);
+
+  els.btnSessionsTab?.addEventListener("click", toggleSessionsDrawer);
+  els.btnSessionsClose?.addEventListener("click", closeSessionsDrawer);
+  els.sessionsBackdrop?.addEventListener("click", closeSessionsDrawer);
+
+  els.btnSettings?.addEventListener("click", openSettings);
+  els.toggleSessionNotes?.addEventListener("change", (e) => setShowSessionNotes(e.target.checked));
+  els.toggleStartTime?.addEventListener("change", (e) => setShowStartTime(e.target.checked));
+  els.btnGlobeTz?.addEventListener("click", openTzPicker);
+  els.btnOpenTzPicker?.addEventListener("click", openTzPicker);
+  els.tzPrev?.addEventListener("click", () => shiftPicker(-1));
+  els.tzNext?.addEventListener("click", () => shiftPicker(1));
+  els.tzConfirm?.addEventListener("click", confirmTimezone);
+
+  els.btnExportSessions?.addEventListener("click", exportSessions);
+  els.btnImportSessions?.addEventListener("click", triggerImportPicker);
+  els.btnExportSessionsSide?.addEventListener("click", () => {
+    if (els.settingsModal.classList.contains("hidden")) openSettings();
+    const backup = document.querySelector('.accordion-item[data-accordion="backup"]');
+    document.querySelectorAll(".accordion-item.is-open").forEach((el) => el.classList.remove("is-open"));
+    if (backup) {
+      backup.classList.add("is-open");
+      backup.querySelector(".accordion-trigger")?.setAttribute("aria-expanded", "true");
+    }
+    exportSessions();
+  });
+  els.btnImportSessionsSide?.addEventListener("click", triggerImportPicker);
+  els.importFileInput?.addEventListener("change", onImportFileChange);
+
+  els.tzBand?.addEventListener("mouseenter", () => els.tzTooltip.classList.add("is-visible"));
+  els.tzBand?.addEventListener("mouseleave", () => els.tzTooltip.classList.remove("is-visible"));
+  els.tzMap?.addEventListener("mouseenter", () => els.tzTooltip.classList.add("is-visible"));
+  els.tzMap?.addEventListener("mouseleave", () => els.tzTooltip.classList.remove("is-visible"));
+
+  document.querySelectorAll("[data-close]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const target = node.getAttribute("data-close");
+      if (target === "settings") closeSettings();
+      if (target === "tz-picker") closeTzPicker();
+      if (target === "name-workout") closeNameModal();
+      if (target === "edit-workout") closeEditWorkout();
+    });
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (!els.editWorkoutModal.classList.contains("hidden")) {
+        closeEditWorkout();
+        return;
+      }
+      if (!els.nameWorkoutModal.classList.contains("hidden")) {
+        closeNameModal();
+        return;
+      }
+      if (!els.tzPickerModal.classList.contains("hidden")) {
+        closeTzPicker();
+        return;
+      }
+      if (!els.settingsModal.classList.contains("hidden")) {
+        closeSettings();
+        return;
+      }
+      if (els.sessionsDrawer.classList.contains("is-open")) {
+        closeSessionsDrawer();
+        return;
+      }
+    }
+    if (els.tzPickerModal.classList.contains("hidden")) return;
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      shiftPicker(-1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      shiftPicker(1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      confirmTimezone();
+    }
+  });
+
+  setupAccordion();
 }
 
-// ── Events ───────────────────────────────────────────────────────
-els.btnStartWorkout.addEventListener("click", onStartWorkoutClick);
-els.btnCycle.addEventListener("click", onCyclePress);
-els.btnFinishExercise.addEventListener("click", onFinishExercise);
-els.btnFinishWorkout.addEventListener("click", onFinishSession);
-els.btnNewSession.addEventListener("click", resetSession);
-els.btnClearHistory.addEventListener("click", onClearHistory);
-els.btnEditCurrent?.addEventListener("click", () => {
-  if (state.activeWorkoutId) openEditWorkout(state.activeWorkoutId);
-});
+bindAppEvents();
 
-els.btnNameConfirm?.addEventListener("click", confirmNameWorkout);
-els.inputWorkoutName?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    confirmNameWorkout();
+// Seed movement name suggestions from past session history (once)
+(function seedMovementNamesFromHistory() {
+  try {
+    const existing = new Set(loadMovementNames());
+    for (const session of loadSessions()) {
+      for (const w of session.workouts || []) {
+        const n = normalizeMovementName(w.name);
+        if (n) existing.add(n);
+      }
+    }
+    if (existing.size) {
+      localStorage.setItem(MOVEMENT_NAMES_KEY, JSON.stringify([...existing]));
+    }
+  } catch {
+    /* ignore */
   }
-});
-
-els.btnEditSaveName?.addEventListener("click", onEditSaveName);
-els.btnEditContinue?.addEventListener("click", onEditContinue);
-els.btnEditRestart?.addEventListener("click", onEditRestart);
-els.btnEditRemove?.addEventListener("click", onEditRemove);
-
-els.btnSessionsTab?.addEventListener("click", toggleSessionsDrawer);
-els.btnSessionsClose?.addEventListener("click", closeSessionsDrawer);
-els.sessionsBackdrop?.addEventListener("click", closeSessionsDrawer);
-
-els.btnSettings.addEventListener("click", openSettings);
-els.toggleSessionNotes?.addEventListener("change", (e) => setShowSessionNotes(e.target.checked));
-els.btnOpenTzPicker.addEventListener("click", openTzPicker);
-els.tzPrev.addEventListener("click", () => shiftPicker(-1));
-els.tzNext.addEventListener("click", () => shiftPicker(1));
-els.tzConfirm.addEventListener("click", confirmTimezone);
-
-els.btnExportSessions?.addEventListener("click", exportSessions);
-els.btnImportSessions?.addEventListener("click", triggerImportPicker);
-els.btnExportSessionsSide?.addEventListener("click", () => {
-  if (els.settingsModal.classList.contains("hidden")) openSettings();
-  // open backup accordion
-  const backup = document.querySelector('.accordion-item[data-accordion="backup"]');
-  document.querySelectorAll(".accordion-item.is-open").forEach((el) => el.classList.remove("is-open"));
-  if (backup) {
-    backup.classList.add("is-open");
-    backup.querySelector(".accordion-trigger")?.setAttribute("aria-expanded", "true");
-  }
-  exportSessions();
-});
-els.btnImportSessionsSide?.addEventListener("click", triggerImportPicker);
-els.importFileInput?.addEventListener("change", onImportFileChange);
-
-els.tzBand.addEventListener("mouseenter", () => els.tzTooltip.classList.add("is-visible"));
-els.tzBand.addEventListener("mouseleave", () => els.tzTooltip.classList.remove("is-visible"));
-els.tzMap.addEventListener("mouseenter", () => els.tzTooltip.classList.add("is-visible"));
-els.tzMap.addEventListener("mouseleave", () => els.tzTooltip.classList.remove("is-visible"));
-
-document.querySelectorAll("[data-close]").forEach((node) => {
-  node.addEventListener("click", () => {
-    const target = node.getAttribute("data-close");
-    if (target === "settings") closeSettings();
-    if (target === "tz-picker") closeTzPicker();
-    if (target === "name-workout") closeNameModal();
-    if (target === "edit-workout") closeEditWorkout();
-  });
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    if (!els.editWorkoutModal.classList.contains("hidden")) {
-      closeEditWorkout();
-      return;
-    }
-    if (!els.nameWorkoutModal.classList.contains("hidden")) {
-      closeNameModal();
-      return;
-    }
-    if (!els.tzPickerModal.classList.contains("hidden")) {
-      closeTzPicker();
-      return;
-    }
-    if (!els.settingsModal.classList.contains("hidden")) {
-      closeSettings();
-      return;
-    }
-    if (els.sessionsDrawer.classList.contains("is-open")) {
-      closeSessionsDrawer();
-      return;
-    }
-  }
-  if (els.tzPickerModal.classList.contains("hidden")) return;
-  if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    shiftPicker(-1);
-  } else if (e.key === "ArrowRight") {
-    e.preventDefault();
-    shiftPicker(1);
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    confirmTimezone();
-  }
-});
-
-setupAccordion();
+})();
 
 // ── Init ─────────────────────────────────────────────────────────
 updateClock();
 setInterval(updateClock, 1000);
 renderHistory();
+updateSelectModeUI();
+updateSessionStartDisplay();
 showScreen("start");

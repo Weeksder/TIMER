@@ -36,10 +36,22 @@
     <div id="history-list" class="history-list">
       <p class="history-empty" id="history-empty">No finished sessions yet.</p>
     </div>
-    <div class="history-footer">
+    <div class="history-footer" id="history-footer-default">
       <button id="btn-export-sessions-side" class="btn btn-backup btn-sm" type="button">Export</button>
       <button id="btn-import-sessions-side" class="btn btn-backup btn-backup-secondary btn-sm" type="button">Import</button>
-      <button id="btn-clear-history" class="btn btn-ghost btn-sm" type="button">Clear</button>
+      <button id="btn-delete-mode" class="btn btn-icon-delete btn-sm" type="button" title="Delete sessions" aria-label="Delete sessions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6M14 11v6" />
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+        </svg>
+      </button>
+    </div>
+    <div class="history-footer history-footer-select hidden" id="history-footer-select">
+      <button id="btn-select-all" class="btn btn-backup btn-sm" type="button">Select all</button>
+      <button id="btn-delete-selected" class="btn btn-finish-workout btn-sm" type="button">Delete</button>
+      <button id="btn-cancel-select" class="btn btn-ghost btn-sm" type="button">Cancel</button>
     </div>
   </aside>
 
@@ -86,6 +98,14 @@
               <input id="toggle-session-notes" type="checkbox" />
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
+            <label class="settings-toggle" for="toggle-start-time">
+              <span class="settings-toggle-text">
+                <span class="settings-toggle-title">Show session start time</span>
+                <span class="settings-toggle-hint">Display when today’s session began next to Total</span>
+              </span>
+              <input id="toggle-start-time" type="checkbox" />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
           </div>
         </div>
 
@@ -117,12 +137,19 @@
     <div class="modal-backdrop" data-close="name-workout"></div>
     <div class="modal-panel modal-panel-sm">
       <header class="modal-header">
-        <h2 id="name-workout-title">Name this movement</h2>
+        <div class="modal-title-row">
+          <h2 id="name-workout-title">Name this movement</h2>
+          <button id="btn-name-help" type="button" class="btn-help" aria-expanded="false" aria-controls="name-workout-help" title="Help">?</button>
+        </div>
         <button type="button" class="modal-close" data-close="name-workout" aria-label="Cancel">×</button>
       </header>
-      <p class="settings-hint" id="name-workout-hint">What exercise is this workout?</p>
-      <label class="field-label" for="input-workout-name">Movement name</label>
-      <input id="input-workout-name" class="text-input" type="text" maxlength="60" placeholder="e.g. Bench Press" autocomplete="off" />
+      <div id="name-workout-help" class="help-panel hidden" role="region" aria-label="Help">
+        <p>Type the exercise you’ll track (for example Bench Press or Squats). This becomes the name of the workout so you can tell movements apart in your session list and summary.</p>
+      </div>
+      <div class="name-suggest-wrap">
+        <input id="input-workout-name" class="text-input" type="text" maxlength="60" placeholder="e.g. bench press" autocomplete="off" autocapitalize="none" aria-label="Movement name" aria-autocomplete="list" aria-controls="name-suggest-list" />
+        <ul id="name-suggest-list" class="name-suggest-list hidden" role="listbox"></ul>
+      </div>
       <div class="modal-actions">
         <button id="btn-name-cancel" class="btn btn-ghost" type="button" data-close="name-workout">Cancel</button>
         <button id="btn-name-confirm" class="btn btn-start" type="button">Confirm</button>
@@ -238,25 +265,59 @@
     </div>
   </div>
 
+  <!-- Overlays sit outside .layout so page blur never covers them -->
+  <div id="countdown-overlay" class="countdown-overlay hidden" aria-live="assertive" aria-hidden="true">
+    <div class="countdown-card">
+      <p class="countdown-kicker">Get ready</p>
+      <p id="countdown-number" class="countdown-number">3</p>
+      <p id="countdown-sub" class="countdown-sub">Starting session…</p>
+    </div>
+  </div>
+
+  <div id="pause-overlay" class="countdown-overlay pause-overlay hidden" aria-live="polite" aria-hidden="true">
+    <div class="countdown-card pause-card">
+      <p class="countdown-kicker">Paused</p>
+      <div class="pause-icon" aria-hidden="true">
+        <span></span><span></span>
+      </div>
+      <p class="countdown-sub">Session timers are frozen</p>
+      <button id="btn-resume-overlay" class="btn btn-start" type="button">Resume</button>
+    </div>
+  </div>
+
   <div class="layout layout-full">
     <div class="app">
       <div id="main-timer" class="main-timer hidden" aria-live="polite">
-        <span class="main-timer-label">Total</span>
-        <span id="main-timer-value" class="main-timer-value">00:00</span>
+        <div class="main-timer-block">
+          <span class="main-timer-label">Total</span>
+          <span id="main-timer-value" class="main-timer-value">00:00</span>
+        </div>
+        <div id="session-start-block" class="main-timer-block main-timer-start hidden">
+          <span class="main-timer-label">Start</span>
+          <span id="session-start-value" class="main-timer-value main-timer-start-value">—</span>
+        </div>
+        <button id="btn-pause-session" type="button" class="btn-pause-icon" title="Pause session" aria-label="Pause session">
+          <span class="pause-bars" aria-hidden="true"><span></span><span></span></span>
+        </button>
       </div>
 
       <!-- Screen: Pre-start -->
       <section id="screen-start" class="screen">
         <header class="header">
           <p class="eyebrow">Workout Counter</p>
-          <h1>Ready when you are</h1>
         </header>
 
         <div class="date-card">
-          <p id="date-label" class="date-label">Today · United States (Eastern)</p>
+          <p id="date-label" class="date-label">Today</p>
           <p id="current-date" class="date-value"></p>
           <p id="current-time" class="time-value"></p>
-          <p id="timezone-note" class="timezone-note">Timezone: America/New_York</p>
+          <button id="btn-globe-tz" type="button" class="btn-globe" title="Change timezone" aria-label="Change timezone">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18" />
+              <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+            </svg>
+          </button>
         </div>
 
         <div class="legend">
@@ -313,7 +374,6 @@
           </div>
           <p id="phase-label" class="phase-label">Press Start to begin</p>
           <p id="phase-timer" class="phase-timer">00:00</p>
-          <p id="phase-hint" class="phase-hint">Movement time for this set</p>
         </div>
 
         <div class="controls controls-main">
@@ -322,14 +382,16 @@
           </button>
         </div>
 
-        <div class="live-log" id="live-log" aria-label="Sets and breaks so far">
-          <p class="live-log-title">This workout</p>
+        <div class="live-log hidden" id="live-log" aria-label="Sets and breaks so far">
           <ul id="live-log-list"></ul>
         </div>
 
         <!-- Finished / paused workouts reference -->
         <div class="finished-workouts" id="finished-workouts" aria-label="Workouts in this session">
           <p class="finished-workouts-title">Workouts this session</p>
+          <div id="session-pause-note" class="session-pause-note hidden" role="status">
+            Session paused · timers frozen
+          </div>
           <ul id="finished-workouts-list" class="finished-workouts-list"></ul>
           <p id="finished-workouts-empty" class="finished-empty">Finished workouts will show here.</p>
         </div>
@@ -356,9 +418,14 @@
         <div class="summary-meta" id="summary-meta"></div>
         <div class="summary-body" id="summary-body"></div>
 
-        <button id="btn-new-session" class="btn btn-start btn-lg" type="button">
-          New Session
-        </button>
+        <div class="summary-actions">
+          <button id="btn-resume-session" class="btn btn-backup btn-lg" type="button">
+            Resume
+          </button>
+          <button id="btn-new-session" class="btn btn-start btn-lg" type="button">
+            New Session
+          </button>
+        </div>
       </section>
     </div>
   </div>
