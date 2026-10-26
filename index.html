@@ -135,10 +135,6 @@
   }
   .set-box.digits-2 #setNum { font-size: 24cqi; }
   .set-box.digits-3 #setNum { font-size: 18cqi; }
-  .set-box.tint-yellow #setNum {
-    color: #e6cc00;
-    text-shadow: 0 1px 0 #8a7300, 0 -1px 0 #8a7300, 1px 0 0 #8a7300, -1px 0 0 #8a7300;
-  }
   .set-box.is-fresh { border-color: var(--green); }
   .set-box.is-fresh #setNum,
   .set-box.is-fresh .set-label { color: var(--green); }
@@ -188,6 +184,12 @@
   }
   .status.is-green { color: var(--green); }
   .status.is-red { color: var(--red); }
+  .status.is-continue {
+    color: var(--blue);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    transform: none;
+  }
   .under-timer { flex: 0.28; min-height: 2cqi; }
   .button-slot {
     flex: none;
@@ -375,6 +377,50 @@
     padding: 1.2cqi 2.6cqi 1.8cqi;
   }
   .ios-card.apart { margin-top: 6.5cqi; }
+  #whenCard {
+    background: transparent;
+    padding: 0;
+  }
+  #whenCard > * + * { margin-top: -2px; }
+  #whenCard .ios-head,
+  #whenCard > .ios-row,
+  #whenCard > .ios-drop,
+  .when-pair .ios-row {
+    background: #e5e5ea;
+    width: calc(100% - 18cqi);
+    max-width: calc(100% - 18cqi);
+    box-sizing: border-box;
+    padding-left: 2.6cqi;
+    padding-right: 2.2cqi;
+  }
+  #whenCard .ios-head {
+    border-radius: 18px 18px 0 0;
+    padding-top: 1.2cqi;
+    padding-bottom: 0.4cqi;
+  }
+  #whenCard > .ios-drop { padding-top: 0.2cqi; padding-bottom: 1.4cqi; }
+  #whenCard:not(:has(#endDrop:not([hidden]))) #rowEnd,
+  #whenCard:has(#endDrop:not([hidden])) #endDrop {
+    border-radius: 0 0 18px 18px;
+  }
+  .when-pair { position: relative; }
+  .now-side {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 15.5cqi;
+    border: 0;
+    background: transparent;
+    color: var(--brown);
+    font-size: 3.5cqi;
+    font-weight: 750;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
   .ios-head {
     display: flex;
     align-items: center;
@@ -422,6 +468,8 @@
     font-variant-numeric: tabular-nums;
   }
   .ios-row.open b { color: #1d1d1d; }
+  #rowStart, #rowEnd { border-top: 1px solid rgba(60, 60, 67, 0.29); }
+  #limitDrop { border-top: 1px solid rgba(60, 60, 67, 0.29); padding-top: 0.6cqi; }
   .ios-static { pointer-events: none; }
   .ios-drop { padding: 0 0 1.6cqi; }
   .cal-head {
@@ -648,6 +696,50 @@
     border-width: 1.6cqi;
   }
   body.is-wait .play svg polygon { fill: #00f06c; }
+  body.is-back,
+  body.is-back #phone,
+  body.is-back #screen { background: #8e959c; }
+  body.is-back .set-box,
+  body.is-back .set-box.is-fresh { border-color: #1d1d1d; }
+  body.is-back .set-label,
+  body.is-back #setNum,
+  body.is-back .set-box.is-fresh .set-label,
+  body.is-back .set-box.is-fresh #setNum { color: #1d1d1d; }
+  body.is-back .wk-pill {
+    background: #fff;
+    color: #1d1d1d;
+    border-color: #1d1d1d;
+  }
+  body.is-back .button-wrap {
+    background: #fff;
+    border-radius: 5.6cqi;
+    box-sizing: content-box;
+    padding: 3.2cqi;
+    margin: -3.2cqi;
+  }
+  .day-field { flex: 1; min-width: 0; }
+  .day-suggest {
+    margin-top: 1.6cqi;
+    background: #fff;
+    border: 1px solid #e3e3e8;
+    border-radius: 12px;
+    max-height: 42cqi;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .day-suggest button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid #ececf0;
+    background: #fff;
+    color: var(--ink);
+    font-size: 4.1cqi;
+    font-weight: 650;
+    padding: 2.4cqi 3cqi;
+  }
+  .day-suggest button:last-child { border-bottom: 0; }
   .day-done {
     position: absolute;
     inset: 0;
@@ -794,31 +886,42 @@
         <b id="dateVal">—</b>
       </button>
       <div id="dateDrop" class="ios-drop" hidden></div>
-      <button id="rowStart" class="ios-row" type="button">
-        <span>Start</span>
-        <b id="startVal">—</b>
-      </button>
+      <div class="when-pair">
+        <button id="rowStart" class="ios-row" type="button">
+          <span>Start</span>
+          <b id="startVal">—</b>
+        </button>
+        <button id="startNow" class="now-side" type="button">(Now)</button>
+      </div>
       <div id="startDrop" class="ios-drop" hidden></div>
-      <button id="rowEnd" class="ios-row" type="button">
-        <span>End</span>
-        <b id="endVal">12:00 PM</b>
-      </button>
+      <div class="when-pair">
+        <button id="rowEnd" class="ios-row" type="button">
+          <span>End</span>
+          <b id="endVal">12:00 PM</b>
+        </button>
+        <button id="endNow" class="now-side" type="button">(Now)</button>
+      </div>
       <div id="endDrop" class="ios-drop" hidden></div>
     </div>
-    <div class="ios-card apart">
-      <div class="ios-row ios-static">
+    <div class="ios-card apart" id="limitCard">
+      <button id="rowLimit" class="ios-row" type="button" aria-expanded="false" aria-controls="limitDrop">
         <span>Break limit</span>
         <b id="limitVal">1:00</b>
+      </button>
+      <div id="limitDrop" hidden>
+        <div class="wheel-labels"><span>min</span><span>sec</span></div>
+        <div class="wheel-wrap" id="limitWheels"></div>
       </div>
-      <div class="wheel-labels"><span>min</span><span>sec</span></div>
-      <div class="wheel-wrap" id="limitWheels"></div>
     </div>
     <section class="block">
       <h3>Day</h3>
       <div class="row">
-        <input id="dayInput" type="text" maxlength="24" placeholder="e.g. Legs" aria-label="Add a day" autocomplete="off">
+        <div class="day-field">
+          <input id="dayInput" type="text" maxlength="24" placeholder="e.g. Legs" aria-label="Add a day" autocomplete="off">
+        </div>
         <button id="dayAdd" class="add" type="button">Add</button>
       </div>
+      <div id="daySuggest" class="day-suggest" hidden></div>
     </section>
     <div id="dayList" class="chips"></div>
     <button id="endDay" class="wide primary" type="button">End day</button>
@@ -924,6 +1027,7 @@
   }
 
   function haltStale(data) {
+    if (document.wasDiscarded) return false;
     var changed = false;
     (data.workouts || []).forEach(function (w) {
       if (!w.setClocks) return;
@@ -1062,6 +1166,23 @@
     return true;
   }
 
+  function setWasStarted(w, n) {
+    var c = w.setClocks && w.setClocks[String(n)];
+    return !!(c && (c.elapsed > 0 || c.runningSince));
+  }
+
+  function clearStartedSet(w, n) {
+    if (!w || w.status !== "active" || !setWasStarted(w, n)) return false;
+    pauseClock(w, n, Date.now());
+    var key = String(n);
+    if (w.setClocks) delete w.setClocks[key];
+    if (Array.isArray(w.breaks)) {
+      w.breaks = w.breaks.filter(function (b) { return String(b.set) !== key; });
+    }
+    if (w.freshSet === n) w.freshSet = 0;
+    return true;
+  }
+
   function changeWk(s, delta) {
     var i = -1;
     for (var k = 0; k < s.workouts.length; k++) {
@@ -1089,7 +1210,7 @@
     w.setNum = (w.endedAtSet || 0) + 1;
     if (w.setNum < 1) w.setNum = 1;
     if (w.setNum > MAX_SET) w.setNum = MAX_SET;
-    w.setTint = "yellow";
+    w.setTint = "black";
   }
 
   function confirmResume(w) {
@@ -1232,6 +1353,10 @@
   var rowStart = document.getElementById("rowStart");
   var rowEnd = document.getElementById("rowEnd");
   var limitWheels = document.getElementById("limitWheels");
+  var limitDrop = document.getElementById("limitDrop");
+  var rowLimit = document.getElementById("rowLimit");
+  var daySuggest = document.getElementById("daySuggest");
+  var dayHideTimer = 0;
   var chartBody = document.getElementById("chartBody");
   var rotate = document.getElementById("rotate");
   var toastTimer = 0;
@@ -1362,6 +1487,12 @@
   }
 
   function paintTimer(w, now) {
+    if (w.status === "done") {
+      statusEl.textContent = "Continue?";
+      statusEl.className = "status is-continue";
+      fitTimer();
+      return;
+    }
     var n = displaySet(w);
     var ms = elapsedOf(w, n, now);
     var running = isRunning(w, n);
@@ -1380,12 +1511,11 @@
     setNum.textContent = String(shown);
     setBox.setAttribute("aria-valuenow", String(shown));
     var waiting = !!w.promptStart && w.status === "pending";
-    setBox.classList.toggle("is-fresh", !waiting && w.freshSet === shown && w.setTint !== "yellow");
-    setBox.classList.toggle("tint-yellow", w.status !== "done" && w.setTint === "yellow");
+    setBox.classList.toggle("is-fresh", !waiting && w.freshSet === shown);
     setBox.classList.toggle("digits-2", shown >= 10 && shown < 100);
     setBox.classList.toggle("digits-3", shown >= 100);
     paintTimer(w, now);
-    continueQ.hidden = w.status !== "done";
+    continueQ.hidden = true;
     big.className = "big " + buttonMode(w, now);
     big.setAttribute("aria-label", buttonLabel(w, now));
     wkPill.textContent = "WK " + w.id;
@@ -1399,6 +1529,9 @@
     document.body.classList.toggle("is-locked", locked);
     screenEl.classList.toggle("is-wait", waiting);
     document.body.classList.toggle("is-wait", waiting);
+    var backed = w.status === "done" && !locked;
+    screenEl.classList.toggle("is-back", backed);
+    document.body.classList.toggle("is-back", backed);
     lockMark.hidden = !locked;
     setBox.setAttribute("aria-disabled", locked ? "true" : "false");
     wkPill.setAttribute("aria-disabled", locked ? "true" : "false");
@@ -1584,6 +1717,34 @@
     syncWhen();
   }
 
+  function stampNow(which) {
+    if (!draft) blankDraft();
+    var t = taipeiNow();
+    var clock = { h: t.h, min: t.min, ap: t.ap };
+    if (which === "start") {
+      draft.start = clock;
+      draft.startTouched = true;
+      if (openPick === "start") {
+        buildTimeWheels(startDrop, draft.start, function (n) {
+          draft.start = n;
+          draft.startTouched = true;
+          syncWhen();
+        });
+      }
+    } else {
+      draft.end = clock;
+      draft.endTouched = true;
+      if (openPick === "end") {
+        buildTimeWheels(endDrop, draft.end, function (n) {
+          draft.end = n;
+          draft.endTouched = true;
+          syncWhen();
+        });
+      }
+    }
+    syncWhen();
+  }
+
   function commitWhen() {
     if (!draftDirty()) return;
     if (draft.startTouched || (draft.dateTouched && state.sessionStart)) {
@@ -1619,11 +1780,23 @@
     renderMain();
   }
 
-  function buildLimitWheels() {
-    var total = Math.round((state.breakLimitMs || 0) / 1000);
+  function snapLimit(ms) {
+    var total = Math.round((ms || 0) / 1000);
     var mins = Math.floor(total / 60);
-    var secs = total % 60;
-    if (mins > 180) mins = 180;
+    var secs = Math.round((total % 60) / 5) * 5;
+    if (secs === 60) { mins += 1; secs = 0; }
+    if (mins > 180) { mins = 180; secs = 0; }
+    if (mins < 0) mins = 0;
+    return { mins: mins, secs: secs };
+  }
+
+  function buildLimitWheels() {
+    var snapped = snapLimit(state.breakLimitMs);
+    if ((snapped.mins * 60 + snapped.secs) * 1000 !== state.breakLimitMs) {
+      applyLimit(snapped.mins, snapped.secs);
+    }
+    var mins = snapped.mins;
+    var secs = snapped.secs;
     limitWheels.innerHTML = "";
     var bar = document.createElement("div");
     bar.className = "wheel-bar";
@@ -1632,7 +1805,7 @@
     var secVals = [];
     var i;
     for (i = 0; i <= 180; i++) minVals.push({ label: String(i), value: i });
-    for (i = 0; i < 60; i++) secVals.push({ label: pad(i), value: i });
+    for (i = 0; i < 60; i += 5) secVals.push({ label: pad(i), value: i });
     var hold = { m: mins, s: secs };
     var minCol = makeWheelCol(minVals, mins, function (v) {
       if (hold.m === v) return;
@@ -1651,13 +1824,11 @@
 
   function syncLimitWheels() {
     if (!limitCols) return;
-    var total = Math.round((state.breakLimitMs || 0) / 1000);
-    var mins = Math.min(180, Math.floor(total / 60));
-    var secs = total % 60;
-    limitCols.hold.m = mins;
-    limitCols.hold.s = secs;
-    limitCols.min._setQuiet(mins);
-    limitCols.sec._setQuiet(secs);
+    var snapped = snapLimit(state.breakLimitMs);
+    limitCols.hold.m = snapped.mins;
+    limitCols.hold.s = snapped.secs;
+    limitCols.min._setQuiet(snapped.mins);
+    limitCols.sec._setQuiet(snapped.secs / 5);
     if (limitVal) limitVal.textContent = formatLimit(state.breakLimitMs);
   }
 
@@ -1676,24 +1847,6 @@
       };
     }
     return state;
-  }
-
-  function freezeClocks() {
-    var now = Date.now();
-    var changed = false;
-    state.workouts.forEach(function (w) {
-      if (!w.setClocks) return;
-      Object.keys(w.setClocks).forEach(function (k) {
-        var c = w.setClocks[k];
-        if (!c || !c.runningSince) return;
-        c.elapsed += Math.max(0, now - c.runningSince);
-        c.runningSince = null;
-        changed = true;
-      });
-    });
-    if (!changed) return;
-    save();
-    render();
   }
 
   function renderDays() {
@@ -1788,6 +1941,53 @@
     });
   }
 
+  function hideDaySuggest() {
+    daySuggest.hidden = true;
+    daySuggest.innerHTML = "";
+  }
+
+  function fillDaySuggest() {
+    clearTimeout(dayHideTimer);
+    var q = dayInput.value.trim().toLowerCase();
+    var names = [];
+    state.dayTypes.forEach(function (name) {
+      if (!q || name.toLowerCase().indexOf(q) !== -1) names.push(name);
+    });
+    daySuggest.innerHTML = "";
+    if (!names.length) {
+      daySuggest.hidden = true;
+      return;
+    }
+    names.forEach(function (name) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = name;
+      btn.addEventListener("pointerup", function (e) {
+        e.preventDefault();
+        dayInput.value = name;
+        hideDaySuggest();
+      });
+      daySuggest.appendChild(btn);
+    });
+    daySuggest.hidden = false;
+  }
+
+  function closeLimit() {
+    limitDrop.hidden = true;
+    rowLimit.classList.remove("open");
+    rowLimit.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleLimit() {
+    var open = limitDrop.hidden;
+    limitDrop.hidden = !open;
+    rowLimit.classList.toggle("open", open);
+    rowLimit.setAttribute("aria-expanded", open ? "true" : "false");
+    if (!open) return;
+    if (!limitCols) buildLimitWheels();
+    else syncLimitWheels();
+  }
+
   function addDay() {
     var name = dayInput.value.trim().replace(/\s+/g, " ").slice(0, 24);
     if (!name) return;
@@ -1801,6 +2001,7 @@
     }
     state.dayType = found;
     dayInput.value = "";
+    hideDaySuggest();
     save();
     renderDays();
     if (!chart.hidden) renderChart();
@@ -1813,6 +2014,8 @@
     resetAsk.hidden = true;
     askNotify();
     blankDraft();
+    closeLimit();
+    hideDaySuggest();
     syncWhen();
     renderDays();
   }
@@ -1831,6 +2034,7 @@
     confirmSheet.hidden = true;
     resetAsk.hidden = true;
     dayDone.hidden = true;
+    hideDaySuggest();
   }
 
   big.addEventListener("click", function () {
@@ -1903,6 +2107,8 @@
   rowDate.addEventListener("click", function () { togglePick("date"); });
   rowStart.addEventListener("click", function () { togglePick("start"); });
   rowEnd.addEventListener("click", function () { togglePick("end"); });
+  document.getElementById("startNow").addEventListener("click", function () { stampNow("start"); });
+  document.getElementById("endNow").addEventListener("click", function () { stampNow("end"); });
   whenOk.addEventListener("click", commitWhen);
   dateDrop.addEventListener("click", function (e) {
     var nav = e.target.closest("[data-cal]");
@@ -1924,9 +2130,17 @@
     syncWhen();
   });
   document.getElementById("dayAdd").addEventListener("click", addDay);
+  daySuggest.addEventListener("pointerdown", function (e) { e.preventDefault(); });
+  dayInput.addEventListener("focus", fillDaySuggest);
+  dayInput.addEventListener("click", fillDaySuggest);
+  dayInput.addEventListener("input", fillDaySuggest);
+  dayInput.addEventListener("blur", function () {
+    dayHideTimer = setTimeout(hideDaySuggest, 160);
+  });
   dayInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") { e.preventDefault(); addDay(); }
   });
+  rowLimit.addEventListener("click", toggleLimit);
   document.getElementById("askNewDay").addEventListener("click", function () {
     gear.hidden = true;
     confirmSheet.hidden = false;
@@ -1955,11 +2169,15 @@
   });
   document.addEventListener("pointerdown", armAudio, { once: true });
 
-  function bindScroller(el, onDelta) {
+  function bindScroller(el, onDelta, onEnd) {
     var STEP = 28;
     var start = null;
     var acc = 0;
-    function end() { start = null; acc = 0; }
+    function end() {
+      start = null;
+      acc = 0;
+      if (onEnd) onEnd();
+    }
     if (window.PointerEvent) {
       el.addEventListener("pointerdown", function (e) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -1970,7 +2188,7 @@
       el.addEventListener("pointermove", function (e) {
         if (start == null) return;
         var steps = Math.trunc((start - e.clientY) / STEP);
-        if (steps !== acc) { onDelta(steps - acc); acc = steps; }
+        if (steps !== acc) { onDelta(steps - acc, "pointer"); acc = steps; }
       });
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
@@ -1980,18 +2198,35 @@
       e.preventDefault();
       wheel += e.deltaY;
       var chunk = 48;
-      while (wheel >= chunk) { onDelta(-1); wheel -= chunk; }
-      while (wheel <= -chunk) { onDelta(1); wheel += chunk; }
+      while (wheel >= chunk) { onDelta(-1, "wheel"); wheel -= chunk; }
+      while (wheel <= -chunk) { onDelta(1, "wheel"); wheel += chunk; }
     }, { passive: false });
     el.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowUp") { onDelta(1); e.preventDefault(); }
-      if (e.key === "ArrowDown") { onDelta(-1); e.preventDefault(); }
+      if (e.key === "ArrowUp") { onDelta(1, "key"); e.preventDefault(); }
+      if (e.key === "ArrowDown") { onDelta(-1, "key"); e.preventDefault(); }
     });
   }
 
-  bindScroller(setBox, function (d) {
+  var setDragFrom = null;
+  bindScroller(setBox, function (d, source) {
     if (sheetOpen() || timerLocked(focused(state))) return;
-    if (changeSet(focused(state), d)) { save(); render(); }
+    var w = focused(state);
+    if (!w) return;
+    var from = w.setNum;
+    if (!changeSet(w, d)) return;
+    if (source === "pointer") {
+      if (setDragFrom == null) setDragFrom = from;
+    } else if (d < 0) {
+      clearStartedSet(w, w.setNum + 1);
+    }
+    save();
+    render();
+  }, function () {
+    var w = focused(state);
+    var from = setDragFrom;
+    setDragFrom = null;
+    if (!w || from == null || w.setNum >= from) return;
+    if (clearStartedSet(w, w.setNum + 1)) { save(); render(); }
   });
 
   function shiftWk(d) {
@@ -2071,16 +2306,25 @@
     if (changed) save();
   }
 
+  function noteStillRunning() {
+    checkpointClocks(Date.now());
+  }
+  function noteVisibleAgain() {
+    wakeSentinel = null;
+    syncWake();
+    render();
+  }
+  // Leaving the app only saves the running mark. The clock keeps that mark
+  // so a return can add the time away, as long as iOS still has the page.
+  // A real close reloads the file, and haltStale then stops it without
+  // adding the gap. iOS can also discard the page later with no fixed delay.
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "hidden") freezeClocks();
-    else {
-      wakeSentinel = null;
-      syncWake();
-      render();
-    }
+    if (document.visibilityState === "hidden") noteStillRunning();
+    else noteVisibleAgain();
   });
-  window.addEventListener("pagehide", freezeClocks);
-  window.addEventListener("freeze", freezeClocks);
+  window.addEventListener("freeze", noteStillRunning);
+  window.addEventListener("pagehide", noteStillRunning);
+  window.addEventListener("pageshow", noteVisibleAgain);
 
   try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(function () {}); } catch (e) {}
 
@@ -2112,7 +2356,6 @@
     if (!chart.hidden && (anyRunning() || alerted)) renderChart();
   }, 250);
 
-  buildLimitWheels();
   blankDraft();
   renderDays();
   render();
