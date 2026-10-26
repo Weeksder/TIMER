@@ -19,7 +19,6 @@
     --blue: #1d74c2;
     --brown: #806151;
     --gray: #c8c8c8;
-    --line: #1d1d1d;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -37,7 +36,6 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    padding: 8px;
     user-select: none;
     -webkit-user-select: none;
   }
@@ -46,29 +44,31 @@
   #phone {
     container-type: inline-size;
     min-width: 0;
-    min-height: 0;
-    width: min(100%, calc((100dvh - 16px) * 9 / 19.5));
+    width: min(100%, calc(100dvh * 9 / 19.5));
     aspect-ratio: 9 / 19.5;
-    max-height: calc(100dvh - 16px);
+    max-height: 100dvh;
     background: var(--bg);
-    border: 2.5px solid var(--ink);
-    border-radius: 28px;
     position: relative;
     overflow: hidden;
   }
   #screen {
+    position: relative;
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 4.2cqi 4.6cqi 3.4cqi;
+    padding:
+      calc(2.6cqi + env(safe-area-inset-top))
+      calc(3.2cqi + env(safe-area-inset-right))
+      calc(1.8cqi + env(safe-area-inset-bottom))
+      calc(3.2cqi + env(safe-area-inset-left));
     min-height: 0;
   }
   .gear {
     position: absolute;
-    top: 3.2cqi;
-    left: 3.4cqi;
-    width: 11cqi;
-    height: 11cqi;
+    top: 2.4cqi;
+    left: 2.6cqi;
+    width: 12cqi;
+    height: 12cqi;
     border: 0;
     background: transparent;
     color: #2a2a2a;
@@ -77,25 +77,25 @@
     place-items: center;
     z-index: 2;
   }
-  .gear svg { width: 6.4cqi; height: 6.4cqi; }
+  .gear svg { width: 7cqi; height: 7cqi; }
   .set-row {
     margin-top: 5.5cqi;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 3cqi;
+    gap: 3.2cqi;
+    flex: none;
   }
   .set-label {
     color: var(--gray);
-    font-size: 5.4cqi;
+    font-size: 8cqi;
     font-weight: 650;
-    letter-spacing: 0.01em;
   }
   .set-box {
-    width: 36cqi;
-    height: 30cqi;
-    border: 3px solid var(--line);
-    border-radius: 4.6cqi;
+    width: 48cqi;
+    height: 44cqi;
+    border: 3.5px solid var(--ink);
+    border-radius: 5.6cqi;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -103,55 +103,69 @@
     touch-action: none;
     cursor: ns-resize;
   }
-  .set-box:focus { outline: none; }
-  .set-box:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .set-box:focus, .wk-pill:focus { outline: none; }
+  .set-box:focus-visible, .wk-pill:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
   #setNum {
-    font-size: 18cqi;
+    font-size: 31cqi;
     font-weight: 750;
-    line-height: 0.9;
+    line-height: 0.85;
     letter-spacing: -0.04em;
     color: var(--ink);
   }
-  .set-box.digits-2 #setNum { font-size: 15cqi; }
-  .set-box.digits-3 #setNum { font-size: 11cqi; }
+  .set-box.digits-2 #setNum { font-size: 24cqi; }
+  .set-box.digits-3 #setNum { font-size: 18cqi; }
   .set-box.tint-yellow #setNum {
     color: #e6cc00;
     text-shadow: 0 1px 0 #8a7300, 0 -1px 0 #8a7300, 1px 0 0 #8a7300, -1px 0 0 #8a7300;
   }
-  .status-slot {
-    flex: 1.15;
+  .above-timer {
+    flex: 1.05;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 8cqi;
+    padding-bottom: 1cqi;
+  }
+  .continue-q {
+    font-size: 13cqi;
+    font-weight: 750;
+    color: var(--blue);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .timer-slot {
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 12cqi;
+    min-height: 26cqi;
+    overflow: visible;
   }
   .status {
-    font-size: 11.5cqi;
-    font-weight: 800;
-    letter-spacing: -0.03em;
+    font-size: 26cqi;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 0.85;
     font-variant-numeric: tabular-nums;
-    line-height: 1;
+    font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", "Segoe UI", sans-serif;
+    color: var(--ink);
+    white-space: nowrap;
+    transform: scaleY(1.22);
+    transform-origin: center center;
   }
   .status.is-green { color: var(--green); }
   .status.is-red { color: var(--red); }
-  .status.is-blue { color: var(--blue); font-weight: 750; letter-spacing: -0.02em; }
-  .dash {
-    height: 3px;
-    width: 78%;
-    margin: 0 auto;
-    background: repeating-linear-gradient(90deg, var(--ink) 0 14px, transparent 14px 24px);
-    flex: none;
-  }
+  .under-timer { flex: 0.28; min-height: 2cqi; }
   .button-slot {
-    flex: 1;
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 34cqi;
+    padding: 1cqi 0 2cqi;
   }
   .big {
-    width: 38cqi;
-    height: 38cqi;
+    width: 50cqi;
+    height: 50cqi;
     border-radius: 50%;
     border: 4px solid transparent;
     background: var(--ink);
@@ -169,42 +183,41 @@
     45% { transform: scale(1.07); }
     100% { transform: scale(1); }
   }
-  .bottom { flex: none; padding: 2cqi 1.2cqi 0 0; }
+  .under-button { flex: 0.85; }
+  .bottom { flex: none; }
   .wk-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 3cqi;
-    min-height: 20cqi;
+    min-height: 22cqi;
   }
   .wk-pill {
-    width: 58%;
-    min-height: 19cqi;
+    flex: 1;
+    min-height: 26cqi;
     border: 2.5px solid var(--brown);
-    border-radius: 4.2cqi;
+    border-radius: 4.6cqi;
     color: var(--brown);
     background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 8.2cqi;
+    font-size: 13cqi;
     font-weight: 650;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.05em;
     touch-action: none;
     cursor: ew-resize;
   }
-  .wk-pill:focus { outline: none; }
-  .wk-pill:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
   .side-slot {
-    width: 18cqi;
-    height: 18cqi;
+    width: 30cqi;
+    height: 30cqi;
     display: grid;
     place-items: center;
     flex: none;
   }
-  .play, .stop {
-    width: 17cqi;
-    height: 17cqi;
+  .play {
+    width: 18cqi;
+    height: 18cqi;
     border: 0;
     background: transparent;
     padding: 0;
@@ -212,16 +225,25 @@
     place-items: center;
     touch-action: manipulation;
   }
-  .play svg, .stop svg { width: 100%; height: 100%; display: block; }
+  .play svg { width: 100%; height: 100%; display: block; }
   .play:active, .stop:active { transform: scale(0.94); }
+  .stop {
+    width: 28cqi;
+    height: 28cqi;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    display: block;
+    touch-action: manipulation;
+  }
+  .stop svg { width: 100%; height: 100%; display: block; }
   .start-time {
-    min-height: 5cqi;
-    margin: 1.6cqi 0 0 1cqi;
+    min-height: 5.5cqi;
+    margin: 1.4cqi 0 0 0.6cqi;
     color: var(--red);
-    font-size: 4.2cqi;
+    font-size: 4.6cqi;
     font-weight: 750;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
   }
   .sheet {
     position: absolute;
@@ -232,11 +254,7 @@
     padding: 4.5cqi 4.6cqi 6cqi;
     -webkit-overflow-scrolling: touch;
   }
-  .sheet h2 {
-    margin: 0;
-    font-size: 6.4cqi;
-    font-weight: 750;
-  }
+  .sheet h2 { margin: 0; font-size: 6.6cqi; font-weight: 750; }
   .sheet-head {
     display: flex;
     align-items: center;
@@ -248,15 +266,11 @@
     height: 10cqi;
     border: 0;
     background: transparent;
-    font-size: 7cqi;
+    font-size: 7.5cqi;
     line-height: 1;
     color: var(--ink);
   }
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3.2cqi;
-  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 3.2cqi; }
   .sheet h3 {
     margin: 0 0 1.4cqi;
     font-size: 3.6cqi;
@@ -266,11 +280,11 @@
     color: #7d8b96;
   }
   .clock {
-    font-size: 6cqi;
+    font-size: 6.2cqi;
     font-weight: 800;
     color: var(--red);
     font-variant-numeric: tabular-nums;
-    min-height: 7cqi;
+    min-height: 7.2cqi;
   }
   .clock.muted { color: #b7c0c7; }
   .row { display: flex; gap: 2cqi; align-items: center; }
@@ -287,7 +301,7 @@
     width: 100%;
   }
   .sheet input:focus { outline: 2px solid var(--blue); border-color: transparent; }
-  .mini, .add, .now, .wide, .danger, .ghost {
+  .add, .now, .wide, .danger, .ghost {
     border-radius: 12px;
     border: 2px solid var(--ink);
     background: #fff;
@@ -344,7 +358,7 @@
     text-align: center;
     padding: 2cqi 1cqi 1.6cqi;
   }
-  .stat b { display: block; font-size: 7cqi; font-weight: 800; letter-spacing: -0.03em; }
+  .stat b { display: block; font-size: 7cqi; font-weight: 800; }
   .stat span { color: #7d8b96; font-size: 3cqi; font-weight: 700; }
   .day-name { margin: 1cqi 0 0; color: var(--brown); font-size: 6cqi; font-weight: 750; }
   .when { margin: 0.6cqi 0 0; color: var(--red); font-size: 4cqi; font-weight: 750; font-variant-numeric: tabular-nums; }
@@ -357,7 +371,7 @@
   .fill { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--green); }
   .fill.over { background: var(--red); }
   .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: #1d1d1d; opacity: 0.45; }
-  .bar-time { font-size: 3.3cqi; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .bar-time { font-size: 3.4cqi; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .bar-time.over { color: var(--red); }
   .empty-chart { color: #7d8b96; font-size: 4cqi; margin-top: 6cqi; }
   #toast {
@@ -387,6 +401,26 @@
     text-align: center;
   }
   #rotate p { margin: 0; font-size: 28px; font-weight: 750; }
+  #screen.is-locked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(168, 174, 180, 0.46);
+    z-index: 3;
+    pointer-events: none;
+  }
+  #screen.is-locked .timer-slot,
+  #screen.is-locked .button-slot {
+    position: relative;
+    z-index: 4;
+  }
+  #screen.is-locked .gear,
+  #screen.is-locked .set-row,
+  #screen.is-locked .above-timer,
+  #screen.is-locked .bottom {
+    filter: grayscale(1);
+    pointer-events: none;
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -408,26 +442,32 @@
         <span id="setNum">1</span>
       </div>
     </div>
-    <div class="status-slot">
-      <div id="status" class="status"></div>
+    <div class="above-timer">
+      <div id="continueQ" class="continue-q" hidden>Continue?</div>
     </div>
-    <div class="dash" aria-hidden="true"></div>
+    <div class="timer-slot">
+      <div id="status" class="status">0:00:00</div>
+    </div>
+    <div class="under-timer"></div>
     <div class="button-slot">
       <button id="big" class="big is-black" type="button" aria-label="Start break"></button>
     </div>
+    <div class="under-button"></div>
     <div class="bottom">
       <div class="wk-row">
         <div id="wkPill" class="wk-pill" role="spinbutton" tabindex="0" aria-label="Workout. Scroll sideways for the previous or next one.">WK 1</div>
         <div class="side-slot">
           <button id="play" class="play" type="button" aria-label="Start workout">
             <svg viewBox="0 0 80 80" aria-hidden="true">
-              <polygon points="16,8 70,40 16,72" fill="#17965b"></polygon>
+              <polygon points="12,6 72,40 12,74" fill="#17965b"></polygon>
             </svg>
           </button>
           <button id="stop" class="stop" type="button" aria-label="Stop workout" hidden>
-            <svg viewBox="0 0 80 80" aria-hidden="true">
-              <polygon points="24,3 56,3 77,24 77,56 56,77 24,77 3,56 3,24" fill="#dc2b2e"></polygon>
-              <text x="40" y="46" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="700" font-family="ui-rounded, Segoe UI, sans-serif">STOP</text>
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <polygon points="28,2 72,2 98,28 98,72 72,98 28,98 2,72 2,28" fill="#dc2b2e"></polygon>
+              <polygon points="28,10 72,10 90,28 90,72 72,90 28,90 10,72 10,28" fill="#ffffff"></polygon>
+              <polygon points="28,17 72,17 83,28 83,72 72,83 28,83 17,72 17,28" fill="#dc2b2e"></polygon>
+              <text x="50" y="55" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800" font-family="Arial, Helvetica, sans-serif">STOP</text>
             </svg>
           </button>
         </div>
@@ -543,6 +583,10 @@
     return h + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
   }
 
+  function blankClock() {
+    return { elapsed: 0, runningSince: null, notified: false };
+  }
+
   function blankWk(id) {
     return {
       id: id,
@@ -550,10 +594,8 @@
       phase: "idle",
       setNum: 1,
       setTint: "black",
-      breaks: [],
-      endedAtSet: 0,
-      breakStartedAt: null,
-      notifiedOver: false
+      setClocks: {},
+      endedAtSet: 0
     };
   }
 
@@ -570,13 +612,64 @@
     };
   }
 
+  function clockOf(w, n) {
+    if (!w.setClocks) w.setClocks = {};
+    var key = String(n);
+    if (!w.setClocks[key]) w.setClocks[key] = blankClock();
+    return w.setClocks[key];
+  }
+
+  function elapsedOf(w, n, now) {
+    var c = w.setClocks && w.setClocks[String(n)];
+    if (!c) return 0;
+    var extra = c.runningSince ? Math.max(0, now - c.runningSince) : 0;
+    return c.elapsed + extra;
+  }
+
+  function isRunning(w, n) {
+    var c = w.setClocks && w.setClocks[String(n)];
+    return !!(c && c.runningSince);
+  }
+
+  function pauseClock(w, n, now) {
+    var c = w.setClocks && w.setClocks[String(n)];
+    if (!c || !c.runningSince) return c ? c.elapsed : 0;
+    c.elapsed += Math.max(0, now - c.runningSince);
+    c.runningSince = null;
+    return c.elapsed;
+  }
+
+  function pauseAll(w, now) {
+    if (!w.setClocks) return;
+    Object.keys(w.setClocks).forEach(function (k) { pauseClock(w, k, now); });
+  }
+
+  function startClock(w, n, now) {
+    pauseAll(w, now);
+    var c = clockOf(w, n);
+    c.runningSince = now;
+    if (state.breakLimitMs > 0 && c.elapsed < state.breakLimitMs) c.notified = false;
+  }
+
+  function migrate(data) {
+    (data.workouts || []).forEach(function (w) {
+      if (!w.setClocks) w.setClocks = {};
+      (w.breaks || []).forEach(function (b) {
+        var key = String(b.set);
+        if (!w.setClocks[key]) w.setClocks[key] = { elapsed: b.ms || 0, runningSince: null, notified: true };
+        else if ((b.ms || 0) > w.setClocks[key].elapsed) w.setClocks[key].elapsed = b.ms;
+      });
+    });
+    return data;
+  }
+
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
       if (!raw) return fresh();
       var data = JSON.parse(raw);
       if (!data || !Array.isArray(data.workouts) || !data.workouts.length) return fresh();
-      return data;
+      return migrate(data);
     } catch (e) {
       return fresh();
     }
@@ -593,23 +686,16 @@
     return s.workouts[0];
   }
 
-  function isOver(w, now, limit) {
-    if (!w || w.phase !== "break" || !w.breakStartedAt) return false;
-    if (!limit) return false;
-    return (now - w.breakStartedAt) >= limit;
-  }
-
-  function shouldAlert(w, now, limit) {
-    return !!(w && w.phase === "break" && !w.notifiedOver && isOver(w, now, limit));
-  }
-
   function displaySet(w) {
-    if (w.status === "done") return w.endedAtSet || w.setNum || 1;
-    return w.setNum;
+    return w.setNum || 1;
+  }
+
+  function overLimit(ms, limit) {
+    return !!(limit > 0 && ms >= limit && ms > 0);
   }
 
   function changeSet(w, delta) {
-    if (!w || w.status === "done") return false;
+    if (!w) return false;
     var n = w.setNum + delta;
     if (n < 1) n = 1;
     if (n > MAX_SET) n = MAX_SET;
@@ -636,28 +722,6 @@
     w.setTint = "black";
   }
 
-  function startBreak(w, now) {
-    if (w.status === "pending") {
-      w.status = "active";
-      w.phase = "working";
-    }
-    w.phase = "break";
-    w.breakStartedAt = now;
-    w.notifiedOver = false;
-    w.setTint = "black";
-  }
-
-  function endBreak(w, now) {
-    var ms = Math.max(0, now - w.breakStartedAt);
-    w.breaks.push({ set: w.setNum, ms: ms });
-    w.breakStartedAt = null;
-    w.notifiedOver = false;
-    w.setTint = "black";
-    if (w.setNum < MAX_SET) w.setNum += 1;
-    w.phase = "working";
-    w.status = "active";
-  }
-
   function continueWorkout(w) {
     if (!w || w.status !== "done") return;
     w.status = "active";
@@ -666,8 +730,6 @@
     if (w.setNum < 1) w.setNum = 1;
     if (w.setNum > MAX_SET) w.setNum = MAX_SET;
     w.setTint = "yellow";
-    w.breakStartedAt = null;
-    w.notifiedOver = false;
   }
 
   function confirmResume(w) {
@@ -676,27 +738,32 @@
     w.phase = "working";
   }
 
+  function finishViewedSet(w, now) {
+    pauseClock(w, w.setNum, now);
+    if (w.setNum < MAX_SET) w.setNum += 1;
+    w.phase = "working";
+    w.status = "active";
+    w.setTint = "black";
+  }
+
   function onBig(s, now) {
     var w = focused(s);
     if (!w) return;
     if (w.status === "done") { continueWorkout(w); return; }
     if (w.phase === "resume-armed") { confirmResume(w); return; }
-    if (w.phase === "break") { endBreak(w, now); return; }
-    startBreak(w, now);
+    if (isRunning(w, w.setNum)) { finishViewedSet(w, now); return; }
+    if (w.status === "pending") onPlay(w);
+    startClock(w, w.setNum, now);
   }
 
   function stopWorkout(s, now) {
     var w = focused(s);
     if (!w || w.status !== "active") return;
-    if (w.phase === "break" && w.breakStartedAt) {
-      w.breaks.push({ set: w.setNum, ms: Math.max(0, now - w.breakStartedAt) });
-    }
+    pauseAll(w, now);
     w.endedAtSet = w.setNum;
-    w.breakStartedAt = null;
-    w.notifiedOver = false;
-    w.setTint = "black";
     w.phase = "done";
     w.status = "done";
+    w.setTint = "black";
     var nextId = w.id + 1;
     var next = null;
     for (var i = 0; i < s.workouts.length; i++) {
@@ -709,45 +776,54 @@
     s.focusedId = next.id;
   }
 
+  function highestTimed(w) {
+    var m = 0;
+    if (!w.setClocks) return 0;
+    Object.keys(w.setClocks).forEach(function (k) {
+      var c = w.setClocks[k];
+      if (c.elapsed > 0 || c.runningSince) m = Math.max(m, parseInt(k, 10) || 0);
+    });
+    return m;
+  }
+
   function summary(s, now) {
     var exercises = [];
     s.workouts.forEach(function (w) {
-      if (w.status === "pending") return;
+      if (w.status === "pending" && highestTimed(w) === 0) return;
       var setCount = w.status === "done" ? (w.endedAtSet || 0) : w.setNum;
-      var live = null;
-      if (w.phase === "break" && w.breakStartedAt) {
-        live = { set: w.setNum, ms: Math.max(0, now - w.breakStartedAt) };
+      setCount = Math.max(setCount, highestTimed(w));
+      var rows = [];
+      var breakCount = 0;
+      var breakMs = 0;
+      for (var n = 1; n <= setCount; n++) {
+        var ms = elapsedOf(w, n, now);
+        var live = isRunning(w, n);
+        if (ms > 0 || live) {
+          breakCount += 1;
+          breakMs += ms;
+        }
+        rows.push({ n: n, ms: ms, live: live });
       }
-      exercises.push({
-        id: w.id,
-        setCount: setCount,
-        breaks: w.breaks.slice(),
-        live: live
-      });
+      exercises.push({ id: w.id, setCount: setCount, rows: rows, breakCount: breakCount, breakMs: breakMs });
     });
     var sets = 0;
-    var breakCount = 0;
-    var breakMs = 0;
+    var breaks = 0;
+    var rest = 0;
     exercises.forEach(function (ex) {
       sets += ex.setCount;
-      breakCount += ex.breaks.length + (ex.live ? 1 : 0);
-      ex.breaks.forEach(function (b) { breakMs += b.ms; });
-      if (ex.live) breakMs += ex.live.ms;
+      breaks += ex.breakCount;
+      rest += ex.breakMs;
     });
-    return { exercises: exercises, sets: sets, breakCount: breakCount, breakMs: breakMs };
-  }
-
-  function applyClock(ms, hours, minutes, seconds) {
-    var d = new Date();
-    d.setHours(hours, minutes, seconds || 0, 0);
-    return d.getTime();
+    return { exercises: exercises, sets: sets, breakCount: breaks, breakMs: rest };
   }
 
   var state = load();
 
+  var screenEl = document.getElementById("screen");
   var setBox = document.getElementById("setBox");
   var setNum = document.getElementById("setNum");
   var statusEl = document.getElementById("status");
+  var continueQ = document.getElementById("continueQ");
   var big = document.getElementById("big");
   var wkPill = document.getElementById("wkPill");
   var play = document.getElementById("play");
@@ -815,9 +891,7 @@
 
   function askNotify() {
     try {
-      if (window.Notification && Notification.permission === "default") {
-        Notification.requestPermission();
-      }
+      if (window.Notification && Notification.permission === "default") Notification.requestPermission();
     } catch (e) {}
   }
 
@@ -848,15 +922,55 @@
 
   function buttonMode(w, now) {
     if (w.status === "done") return "is-yellow";
-    if (w.phase === "break") return isOver(w, now, state.breakLimitMs) ? "is-red" : "is-green";
+    if (w.phase === "resume-armed") return "is-black";
+    if (isRunning(w, w.setNum)) {
+      return overLimit(elapsedOf(w, w.setNum, now), state.breakLimitMs) ? "is-red" : "is-green";
+    }
     return "is-black";
   }
 
-  function buttonLabel(w) {
+  function buttonLabel(w, now) {
     if (w.status === "done") return "Continue this workout";
     if (w.phase === "resume-armed") return "Start this set";
-    if (w.phase === "break") return "End break and next set";
+    if (isRunning(w, w.setNum)) return "Finish set";
+    if (elapsedOf(w, w.setNum, now) > 0) return "Resume set";
     return "Start break";
+  }
+
+  var timerFitLen = -1;
+  function fitTimer() {
+    var len = statusEl.textContent.length;
+    var slot = statusEl.parentElement;
+    if (!slot || !slot.clientWidth) return;
+    if (len === timerFitLen && statusEl.style.fontSize) return;
+    var target = slot.clientWidth * 0.98;
+    var lo = 16;
+    var hi = 46;
+    var best = 28;
+    for (var i = 0; i < 12; i++) {
+      var mid = (lo + hi) / 2;
+      statusEl.style.fontSize = mid.toFixed(2) + "cqi";
+      if (statusEl.scrollWidth > target) hi = mid;
+      else { best = mid; lo = mid; }
+    }
+    statusEl.style.fontSize = (best * 0.98).toFixed(2) + "cqi";
+    timerFitLen = len;
+  }
+
+  function timerLocked(w) {
+    return !!(w && isRunning(w, w.setNum));
+  }
+
+  function paintTimer(w, now) {
+    var n = displaySet(w);
+    var ms = elapsedOf(w, n, now);
+    var running = isRunning(w, n);
+    var cls = "status";
+    if (overLimit(ms, state.breakLimitMs)) cls += " is-red";
+    else if (running || ms > 0) cls += " is-green";
+    statusEl.textContent = formatElapsed(ms);
+    statusEl.className = cls;
+    fitTimer();
   }
 
   function renderMain() {
@@ -868,39 +982,19 @@
     setBox.classList.toggle("tint-yellow", w.status !== "done" && w.setTint === "yellow");
     setBox.classList.toggle("digits-2", shown >= 10 && shown < 100);
     setBox.classList.toggle("digits-3", shown >= 100);
-    var text = "";
-    var cls = "status";
-    if (w.status === "done") {
-      text = "Continue?";
-      cls += " is-blue";
-    } else if (w.phase === "break" && w.breakStartedAt) {
-      text = formatElapsed(now - w.breakStartedAt);
-      cls += isOver(w, now, state.breakLimitMs) ? " is-red" : " is-green";
-    }
-    statusEl.textContent = text;
-    statusEl.className = cls;
+    paintTimer(w, now);
+    continueQ.hidden = w.status !== "done";
     big.className = "big " + buttonMode(w, now);
-    big.setAttribute("aria-label", buttonLabel(w));
+    big.setAttribute("aria-label", buttonLabel(w, now));
     wkPill.textContent = "WK " + w.id;
     wkPill.setAttribute("aria-valuenow", String(w.id));
-    wkPill.setAttribute("aria-label", "Workout " + w.id + ". Scroll sideways for the previous or next one.");
     play.hidden = w.status !== "pending";
     stopBtn.hidden = w.status !== "active";
     startTime.textContent = state.sessionStart ? formatClock(state.sessionStart) : "";
-  }
-
-  function clockText(ms) {
-    return ms ? formatClock(ms) : "—";
-  }
-
-  function renderClocks() {
-    gearStart.textContent = clockText(state.sessionStart);
-    gearStart.classList.toggle("muted", !state.sessionStart);
-    gearEnd.textContent = clockText(state.sessionEnd);
-    gearEnd.classList.toggle("muted", !state.sessionEnd);
-    if (document.activeElement !== startPick) startPick.value = toTimeValue(state.sessionStart);
-    if (document.activeElement !== endPick) endPick.value = toTimeValue(state.sessionEnd);
-    if (document.activeElement !== limitMin && document.activeElement !== limitSec) fillLimitInputs();
+    var locked = timerLocked(w);
+    screenEl.classList.toggle("is-locked", locked);
+    setBox.setAttribute("aria-disabled", locked ? "true" : "false");
+    wkPill.setAttribute("aria-disabled", locked ? "true" : "false");
   }
 
   function toTimeValue(ms) {
@@ -913,6 +1007,16 @@
     var total = Math.round((state.breakLimitMs || 0) / 1000);
     limitMin.value = String(Math.floor(total / 60));
     limitSec.value = String(total % 60);
+  }
+
+  function renderClocks() {
+    gearStart.textContent = state.sessionStart ? formatClock(state.sessionStart) : "—";
+    gearStart.classList.toggle("muted", !state.sessionStart);
+    gearEnd.textContent = state.sessionEnd ? formatClock(state.sessionEnd) : "—";
+    gearEnd.classList.toggle("muted", !state.sessionEnd);
+    if (document.activeElement !== startPick) startPick.value = toTimeValue(state.sessionStart);
+    if (document.activeElement !== endPick) endPick.value = toTimeValue(state.sessionEnd);
+    if (document.activeElement !== limitMin && document.activeElement !== limitSec) fillLimitInputs();
   }
 
   function renderDays() {
@@ -945,18 +1049,22 @@
     });
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   function renderChart() {
     var now = Date.now();
     var sum = summary(state, now);
     var html = "";
     html += '<div class="day-name">' + escapeHtml(state.dayType || "Day not set") + "</div>";
-    var when = (state.sessionStart ? formatClock(state.sessionStart) : "—");
-    when += " – " + (state.sessionEnd ? formatClock(state.sessionEnd) : "—");
-    html += '<div class="when">' + when + "</div>";
+    html += '<div class="when">' + (state.sessionStart ? formatClock(state.sessionStart) : "—") + " – " + (state.sessionEnd ? formatClock(state.sessionEnd) : "—") + "</div>";
     html += '<div class="stats">';
-    html += stat(sum.exercises.length, "exercises");
-    html += stat(sum.sets, "sets");
-    html += stat(sum.breakCount, "breaks");
+    html += '<div class="stat"><b>' + sum.exercises.length + "</b><span>exercises</span></div>";
+    html += '<div class="stat"><b>' + sum.sets + "</b><span>sets</span></div>";
+    html += '<div class="stat"><b>' + sum.breakCount + "</b><span>breaks</span></div>";
     html += "</div>";
     if (!sum.exercises.length) {
       html += '<p class="empty-chart">No exercises yet.</p>';
@@ -964,41 +1072,21 @@
       return;
     }
     sum.exercises.forEach(function (ex) {
-      var rows = [];
-      for (var n = 1; n <= ex.setCount; n++) {
-        var times = ex.breaks.filter(function (b) { return b.set === n; }).map(function (b) { return b.ms; });
-        var live = false;
-        if (ex.live && ex.live.set === n) {
-          times.push(ex.live.ms);
-          live = true;
-        }
-        rows.push({ n: n, times: times, live: live });
-      }
       var maxMs = state.breakLimitMs || 0;
-      rows.forEach(function (row) {
-        row.times.forEach(function (ms) { if (ms > maxMs) maxMs = ms; });
-      });
+      ex.rows.forEach(function (row) { if (row.ms > maxMs) maxMs = row.ms; });
       if (maxMs < 1000) maxMs = 60000;
-      html += '<section class="wk-block">';
-      html += "<h3>WK " + ex.id + "</h3>";
-      var bcount = ex.breaks.length + (ex.live ? 1 : 0);
-      html += '<p class="wk-meta">' + ex.setCount + " sets · " + bcount + " breaks</p>";
-      if (!rows.length) html += '<p class="wk-meta">No sets recorded.</p>';
-      rows.forEach(function (row) {
-        var last = row.times.length ? row.times[row.times.length - 1] : 0;
-        var over = state.breakLimitMs > 0 && last >= state.breakLimitMs;
-        var label = row.times.length ? row.times.map(formatShort).join(" · ") : "—";
+      html += '<section class="wk-block"><h3>WK ' + ex.id + "</h3>";
+      html += '<p class="wk-meta">' + ex.setCount + " sets · " + ex.breakCount + " breaks</p>";
+      ex.rows.forEach(function (row) {
+        var over = overLimit(row.ms, state.breakLimitMs);
+        var label = row.ms > 0 || row.live ? formatShort(row.ms) : "—";
         if (row.live) label += " · going";
-        var width = last ? Math.max(4, Math.round(last / maxMs * 100)) : 0;
+        var width = row.ms ? Math.max(4, Math.round(row.ms / maxMs * 100)) : 0;
         var mark = state.breakLimitMs > 0 ? Math.round(state.breakLimitMs / maxMs * 100) : -1;
-        html += '<div class="bar-row">';
-        html += '<div class="name">set ' + row.n + "</div>";
-        html += '<div class="track">';
+        html += '<div class="bar-row"><div class="name">set ' + row.n + '</div><div class="track">';
         if (width) html += '<div class="fill' + (over ? " over" : "") + '" style="width:' + width + '%"></div>';
         if (mark >= 0 && mark <= 100) html += '<div class="mark" style="left:' + mark + '%"></div>';
-        html += "</div>";
-        html += '<div class="bar-time' + (over ? " over" : "") + '">' + label + "</div>";
-        html += "</div>";
+        html += '</div><div class="bar-time' + (over ? " over" : "") + '">' + label + "</div></div>";
       });
       html += "</section>";
     });
@@ -1008,21 +1096,18 @@
     chart.scrollTop = scroll;
   }
 
-  function stat(n, label) {
-    return '<div class="stat"><b>' + n + "</b><span>" + label + "</span></div>";
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-
   function render() {
     renderMain();
     renderClocks();
     if (!chart.hidden) renderChart();
     syncWake();
+  }
+
+  function anyRunning() {
+    return state.workouts.some(function (w) {
+      if (!w.setClocks) return false;
+      return Object.keys(w.setClocks).some(function (k) { return w.setClocks[k].runningSince; });
+    });
   }
 
   function readLimit() {
@@ -1033,8 +1118,14 @@
     if (m > 180) m = 180;
     if (s > 59) s = 59;
     state.breakLimitMs = (m * 60 + s) * 1000;
+    var now = Date.now();
     state.workouts.forEach(function (w) {
-      if (w.phase === "break" && !isOver(w, Date.now(), state.breakLimitMs)) w.notifiedOver = false;
+      if (!w.setClocks) return;
+      Object.keys(w.setClocks).forEach(function (k) {
+        var c = w.setClocks[k];
+        var ms = c.elapsed + (c.runningSince ? Math.max(0, now - c.runningSince) : 0);
+        if (!overLimit(ms, state.breakLimitMs)) c.notified = false;
+      });
     });
     save();
     render();
@@ -1047,7 +1138,9 @@
     var mm = parseInt(parts[1], 10);
     var ss = parts.length > 2 ? parseInt(parts[2], 10) : 0;
     if (!isFinite(hh) || !isFinite(mm)) return null;
-    return applyClock(Date.now(), hh, mm, ss || 0);
+    var d = new Date();
+    d.setHours(hh, mm, ss || 0, 0);
+    return d.getTime();
   }
 
   function addDay() {
@@ -1099,19 +1192,24 @@
     render();
   });
   play.addEventListener("click", function () {
+    if (timerLocked(focused(state))) return;
     armAudio();
     onPlay(focused(state));
     save();
     render();
   });
   stopBtn.addEventListener("click", function () {
+    if (timerLocked(focused(state))) return;
     stopWorkout(state, Date.now());
     save();
     render();
   });
   big.addEventListener("animationend", function () { big.classList.remove("pulse"); });
 
-  document.getElementById("gearBtn").addEventListener("click", openGear);
+  document.getElementById("gearBtn").addEventListener("click", function () {
+    if (timerLocked(focused(state))) return;
+    openGear();
+  });
   document.getElementById("gearClose").addEventListener("click", function () { gear.hidden = true; });
   document.getElementById("chartClose").addEventListener("click", function () { chart.hidden = true; });
   document.getElementById("openChart").addEventListener("click", openChartSheet);
@@ -1178,25 +1276,18 @@
     var STEP = 28;
     var start = null;
     var acc = 0;
-    function begin(y) { start = y; acc = 0; }
-    function move(y) {
-      if (start == null) return;
-      var directed = start - y;
-      var steps = Math.trunc(directed / STEP);
-      if (steps !== acc) {
-        onDelta(steps - acc);
-        acc = steps;
-      }
-    }
     function end() { start = null; acc = 0; }
     if (window.PointerEvent) {
       el.addEventListener("pointerdown", function (e) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
-        begin(e.clientY);
+        start = e.clientY;
+        acc = 0;
         try { el.setPointerCapture(e.pointerId); } catch (err) {}
       });
       el.addEventListener("pointermove", function (e) {
-        if (start != null) move(e.clientY);
+        if (start == null) return;
+        var steps = Math.trunc((start - e.clientY) / STEP);
+        if (steps !== acc) { onDelta(steps - acc); acc = steps; }
       });
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
@@ -1216,11 +1307,16 @@
   }
 
   bindScroller(setBox, function (d) {
-    if (sheetOpen()) return;
+    if (sheetOpen() || timerLocked(focused(state))) return;
     if (changeSet(focused(state), d)) { save(); render(); }
   });
 
-  function bindWk(el) {
+  function shiftWk(d) {
+    if (sheetOpen() || timerLocked(focused(state))) return;
+    if (changeWk(state, d)) { save(); render(); }
+  }
+
+  (function bindWk(el) {
     var STEP = 32;
     var sx = null;
     var sy = null;
@@ -1238,12 +1334,8 @@
         origin = axis === "x" ? sx : sy;
       }
       var cur = axis === "x" ? x : y;
-      var directed = origin - cur;
-      var steps = Math.trunc(directed / STEP);
-      if (steps !== acc) {
-        shiftWk(steps - acc);
-        acc = steps;
-      }
+      var steps = Math.trunc((origin - cur) / STEP);
+      if (steps !== acc) { shiftWk(steps - acc); acc = steps; }
     }
     if (window.PointerEvent) {
       el.addEventListener("pointerdown", function (e) {
@@ -1254,9 +1346,7 @@
         acc = 0;
         try { el.setPointerCapture(e.pointerId); } catch (err) {}
       });
-      el.addEventListener("pointermove", function (e) {
-        if (sx != null) move(e.clientX, e.clientY);
-      });
+      el.addEventListener("pointermove", function (e) { if (sx != null) move(e.clientX, e.clientY); });
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
     }
@@ -1273,14 +1363,7 @@
       if (e.key === "ArrowRight" || e.key === "ArrowUp") { shiftWk(1); e.preventDefault(); }
       if (e.key === "ArrowLeft" || e.key === "ArrowDown") { shiftWk(-1); e.preventDefault(); }
     });
-  }
-
-  function shiftWk(d) {
-    if (sheetOpen()) return;
-    if (changeWk(state, d)) { save(); render(); }
-  }
-
-  bindWk(wkPill);
+  })(wkPill);
 
   function checkOrient() {
     var landscape = window.innerWidth > window.innerHeight;
@@ -1304,23 +1387,29 @@
     var now = Date.now();
     var alerted = false;
     state.workouts.forEach(function (w) {
-      if (shouldAlert(w, now, state.breakLimitMs)) {
-        w.notifiedOver = true;
-        alerted = true;
-        alertOver();
-        if (w.id === state.focusedId) big.classList.add("pulse");
-      }
+      if (!w.setClocks) return;
+      Object.keys(w.setClocks).forEach(function (k) {
+        var c = w.setClocks[k];
+        if (!c.runningSince || c.notified) return;
+        var ms = c.elapsed + Math.max(0, now - c.runningSince);
+        if (overLimit(ms, state.breakLimitMs)) {
+          c.notified = true;
+          alerted = true;
+          alertOver();
+          if (w.id === state.focusedId && String(w.setNum) === String(k)) big.classList.add("pulse");
+        }
+      });
     });
     if (alerted) save();
     var w = focused(state);
-    if (w && w.phase === "break") renderMain();
-    else if (alerted) renderMain();
-    if (!chart.hidden) renderChart();
+    if ((w && isRunning(w, displaySet(w))) || alerted) renderMain();
+    if (!chart.hidden && (anyRunning() || alerted)) renderChart();
   }, 250);
 
   fillLimitInputs();
   renderDays();
   render();
+  window.addEventListener("resize", function () { timerFitLen = -1; fitTimer(); });
 })();
 </script>
 </body>
