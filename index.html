@@ -65,10 +65,11 @@
   }
   .gear {
     position: absolute;
-    top: 2.4cqi;
-    left: 2.6cqi;
-    width: 12cqi;
-    height: 12cqi;
+    top: 1cqi;
+    right: 0.2cqi;
+    left: auto;
+    width: 15cqi;
+    height: 15cqi;
     border: 0;
     background: transparent;
     color: #2a2a2a;
@@ -77,21 +78,27 @@
     place-items: center;
     z-index: 2;
   }
-  .gear svg { width: 7cqi; height: 7cqi; }
+  .gear svg { width: 11.5cqi; height: 11.5cqi; }
   .set-row {
-    margin-top: 5.5cqi;
+    margin-top: 8cqi;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    gap: 3.2cqi;
     flex: none;
   }
   .set-label {
+    position: absolute;
+    top: 0.4cqi;
+    left: 0;
+    transform: translate(calc(-100% - 1.8cqi), 0);
     color: var(--gray);
-    font-size: 8cqi;
+    font-size: 7.2cqi;
     font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
   }
   .set-box {
+    position: relative;
     width: 48cqi;
     height: 44cqi;
     border: 3.5px solid var(--ink);
@@ -163,6 +170,28 @@
     justify-content: center;
     padding: 1cqi 0 2cqi;
   }
+  .button-wrap {
+    position: relative;
+    width: 50cqi;
+    height: 50cqi;
+    flex: none;
+  }
+  .lock-mark {
+    position: absolute;
+    left: calc(100% + 3.4cqi);
+    top: 50%;
+    width: 10cqi;
+    height: 10cqi;
+    margin-top: -5cqi;
+    border-radius: 50%;
+    border: 2px solid #5c636a;
+    background: #d7dbe0;
+    color: #3c434a;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+  }
+  .lock-mark svg { width: 5.6cqi; height: 5.6cqi; display: block; }
   .big {
     width: 50cqi;
     height: 50cqi;
@@ -401,14 +430,15 @@
     text-align: center;
   }
   #rotate p { margin: 0; font-size: 28px; font-weight: 750; }
-  #screen.is-locked::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: rgba(168, 174, 180, 0.46);
-    z-index: 3;
-    pointer-events: none;
+  body.is-locked,
+  body.is-locked #phone,
+  body.is-locked #screen {
+    background: #8e959c;
   }
+  body.is-locked .status.is-green { color: #00f06c; }
+  body.is-locked .big.is-green { background: #00f06c; }
+  body.is-locked .status.is-red { color: #ff4b4b; }
+  body.is-locked .big.is-red { background: #ff3b30; }
   #screen.is-locked .timer-slot,
   #screen.is-locked .button-slot {
     position: relative;
@@ -419,7 +449,59 @@
   #screen.is-locked .above-timer,
   #screen.is-locked .bottom {
     filter: grayscale(1);
+    opacity: 0.72;
     pointer-events: none;
+  }
+  .day-done {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    padding:
+      calc(7cqi + env(safe-area-inset-top))
+      5cqi
+      calc(4cqi + env(safe-area-inset-bottom));
+  }
+  .day-done-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3.4cqi;
+    min-height: 0;
+  }
+  .day-figure { text-align: center; }
+  .day-figure b {
+    display: block;
+    font-size: 16cqi;
+    font-weight: 750;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .day-figure span {
+    display: block;
+    margin-top: 0.3cqi;
+    font-size: 5.6cqi;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7d8b96;
+  }
+  .day-return {
+    flex: none;
+    width: 100%;
+    margin-top: 3cqi;
+    border-radius: 18px;
+    border: 3px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    font-size: 8.5cqi;
+    font-weight: 750;
+    padding: 2.8cqi 2cqi 3.2cqi;
+    touch-action: manipulation;
   }
   [hidden] { display: none !important; }
 </style>
@@ -437,8 +519,8 @@
       </svg>
     </button>
     <div class="set-row">
-      <div class="set-label">set:</div>
       <div id="setBox" class="set-box" role="spinbutton" tabindex="0" aria-valuemin="1" aria-valuemax="99" aria-label="Set number. Scroll up or down to change.">
+        <div class="set-label">set:</div>
         <span id="setNum">1</span>
       </div>
     </div>
@@ -450,7 +532,15 @@
     </div>
     <div class="under-timer"></div>
     <div class="button-slot">
-      <button id="big" class="big is-black" type="button" aria-label="Start break"></button>
+      <div class="button-wrap">
+        <button id="big" class="big is-black" type="button" aria-label="Start break"></button>
+        <div id="lockMark" class="lock-mark" hidden aria-label="Locked">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="2.2"></rect>
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path>
+          </svg>
+        </div>
+      </div>
     </div>
     <div class="under-button"></div>
     <div class="bottom">
@@ -474,6 +564,16 @@
       </div>
       <div id="startTime" class="start-time"></div>
     </div>
+  </div>
+
+  <div id="dayDone" class="day-done" hidden>
+    <div class="day-done-body">
+      <div class="day-figure"><b id="doneSets">0</b><span>sets</span></div>
+      <div class="day-figure"><b id="doneStart">—</b><span>start</span></div>
+      <div class="day-figure"><b id="doneEnd">—</b><span>end</span></div>
+      <div class="day-figure"><b id="doneWk">0</b><span>WK</span></div>
+    </div>
+    <button id="dayReturn" class="day-return" type="button">(Return)</button>
   </div>
 
   <div id="toast" hidden></div>
@@ -525,7 +625,7 @@
       </div>
       <p class="hint">Past this, the timer and button turn red. The phone vibrates and notifies if it is allowed. 0:00 turns the limit off.</p>
     </section>
-    <button id="endDay" class="wide primary" type="button">End day and see chart</button>
+    <button id="endDay" class="wide primary" type="button">End day</button>
     <button id="openChart" class="wide" type="button">Today's chart</button>
     <button id="askNewDay" class="wide danger" type="button">New day</button>
   </div>
@@ -825,6 +925,8 @@
   var statusEl = document.getElementById("status");
   var continueQ = document.getElementById("continueQ");
   var big = document.getElementById("big");
+  var lockMark = document.getElementById("lockMark");
+  var dayDone = document.getElementById("dayDone");
   var wkPill = document.getElementById("wkPill");
   var play = document.getElementById("play");
   var stopBtn = document.getElementById("stop");
@@ -848,7 +950,7 @@
   var audioCtx = null;
 
   function sheetOpen() {
-    return !gear.hidden || !chart.hidden || !confirmSheet.hidden;
+    return !gear.hidden || !chart.hidden || !confirmSheet.hidden || !dayDone.hidden;
   }
 
   function showToast(text) {
@@ -993,8 +1095,22 @@
     startTime.textContent = state.sessionStart ? formatClock(state.sessionStart) : "";
     var locked = timerLocked(w);
     screenEl.classList.toggle("is-locked", locked);
+    document.body.classList.toggle("is-locked", locked);
+    lockMark.hidden = !locked;
     setBox.setAttribute("aria-disabled", locked ? "true" : "false");
     wkPill.setAttribute("aria-disabled", locked ? "true" : "false");
+  }
+
+  function showDayDone() {
+    var sum = summary(state, Date.now());
+    document.getElementById("doneSets").textContent = String(sum.sets);
+    document.getElementById("doneWk").textContent = String(sum.exercises.length);
+    document.getElementById("doneStart").textContent = state.sessionStart ? formatClock(state.sessionStart) : "—";
+    document.getElementById("doneEnd").textContent = state.sessionEnd ? formatClock(state.sessionEnd) : "—";
+    gear.hidden = true;
+    chart.hidden = true;
+    confirmSheet.hidden = true;
+    dayDone.hidden = false;
   }
 
   function toTimeValue(ms) {
@@ -1181,6 +1297,7 @@
     gear.hidden = true;
     chart.hidden = true;
     confirmSheet.hidden = true;
+    dayDone.hidden = true;
   }
 
   big.addEventListener("click", function () {
@@ -1217,7 +1334,10 @@
     state.sessionEnd = Date.now();
     save();
     render();
-    openChartSheet();
+    showDayDone();
+  });
+  document.getElementById("dayReturn").addEventListener("click", function () {
+    dayDone.hidden = true;
   });
   document.getElementById("endNow").addEventListener("click", function () {
     state.sessionEnd = Date.now();
